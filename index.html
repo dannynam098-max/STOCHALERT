@@ -680,7 +680,7 @@ function symCell(s, open){
 // ===== 정렬 옵션 =====
 const SORTS = {
   eta:  ["도달 임박 순", 1],
-  remain:["목표까지 가까운 순", 1],
+  remain:["남은 거리 짧은 순", 1],
   age:  ["관리 시작 최근 순", 1],
   hits: ["해당 봉 많은 순", -1],
   turn: ["거래대금 큰 순", -1],
@@ -696,6 +696,7 @@ function render(){
   const viewTfs = view==="all" ? tfs : [view];
   const test = fTest(filter), g = groupOf(filter);
   if(!GROUP_SORTS[g].includes(sortKey) && !TFS.includes(sortKey) && !["d","slope","pd","k"].includes(sortKey)){ [sortKey,sortDir]=GROUP_DEFAULT[g]; }
+  if(view==="all" && sortKey==="remain"){ sortKey="hits"; sortDir=-1; }   // 종합에는 남은 거리 열이 없으므로
 
   // 봉 탭 (탭 옆 숫자 = 그 봉에서 현재 필터에 걸린 종목 수)
   const countTf = tf => Object.keys(results).filter(s=>{ const c=classify(results[s][tf]); return c && test(c); }).length;
@@ -725,7 +726,7 @@ function render(){
                     : k==="d"?(x.cs[view]?.d??-1) : k==="slope"?(x.cs[view]?.slope??0) : TFS.includes(k)?tfSortVal(x,k) : 0;
   rows.sort((a,b)=>{ const A=val(a,sortKey),B=val(b,sortKey); return (A>B?1:A<B?-1:0)*sortDir || b.turn-a.turn; });
 
-  $("#sortSel").innerHTML = Object.entries(SORTS).filter(([k])=>GROUP_SORTS[g].includes(k)).map(([k,[n]])=>`<option value="${k}"${k===sortKey?" selected":""}>${n}</option>`).join("")
+  $("#sortSel").innerHTML = Object.entries(SORTS).filter(([k])=>GROUP_SORTS[g].includes(k) && !(view==="all" && k==="remain")).map(([k,[n]])=>`<option value="${k}"${k===sortKey?" selected":""}>${n}</option>`).join("")
     + (SORTS[sortKey]?"":`<option value="${sortKey}" selected>표 제목 기준</option>`);
 
   if(MQ.matches){
