@@ -127,6 +127,8 @@ tr.detail td{padding:6px 12px 16px;background:var(--sel);text-align:left;white-s
 .mini .tfh{font-weight:700;font-size:14px;margin-bottom:2px}
 .mini .sub{margin-top:6px;padding-top:5px;border-top:1px dashed var(--line)}
 .mini .sub.keyset .hd b{color:var(--accent)}
+.trkinfo{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4}
+.trkinfo.tlo{color:var(--cold)} .trkinfo.thi{color:var(--hot)}
 .mini .sub{min-width:0}
 .mini svg{max-width:100%}
 .mini .sub .hd{font-size:12px;margin-bottom:1px}
@@ -446,7 +448,7 @@ async function calc(sym, tf){
 // ===== 관리(트래킹) 상태 계산 =====
 // %D가 30 아래로 들어가면 '30 출발' 관리 시작 → 골크 1번 이하면 %D가, 2번 이상이면 %K가 70에 닿을 때 종료
 // %D가 70 위로 들어가면 '70 출발' 관리 시작 → 데크 1번 이하면 %D가, 2번 이상이면 %K가 30에 닿을 때 종료
-// 관리 중에 같은 쪽으로 다시 들어가도 새로 시작하지 않고 이어감 · 종료 순간 %D가 반대편 안이면 바로 반대쪽 관리 시작
+// 해소 전에 같은 쪽 과구간에 다시 들어가면 그 시점부터 새로 관리 · 종료 순간 %D가 반대편 안이면 바로 반대쪽 관리 시작
 // 교차 인정: K가 D를 넘은 뒤 차이가 '교차 인정 차이' 이상 벌어져야 1번으로 셈.
 //   두 선이 붙어서 0.몇 포인트씩 오가는 잡음은 세지 않음. 차트 점은 실제로 선이 교차한 봉에 찍음.
 const xThr = () => Math.max(0, Math.min(10, parseFloat($("#xthr").value)||0));
@@ -465,6 +467,9 @@ function track(K, D){
         if(st.side==="hi"){ st.n++; st.marks.push(st.rawDn??i); } }
       if(st.side==="lo"){ if(st.n>=2 ? K[i]>=HI : D[i]>=HI){ ended="lo"; st=null; } }
       else              { if(st.n>=2 ? K[i]<=LO : D[i]<=LO){ ended="hi"; st=null; } }
+      // 해소 전에 같은 쪽 과구간에 다시 들어가면: 그 시점부터 새로 관리 (골크·데크 횟수 0부터)
+      if(st && st.side==="lo" && D[i-1]>LO && D[i]<=LO) st=null;
+      if(st && st.side==="hi" && D[i-1]<HI && D[i]>=HI) st=null;
     }
     if(!st){
       const pos = K[i]>D[i] ? 1 : -1;
@@ -610,7 +615,7 @@ function miniGrid(s){
     // 순서: 5·3·3 → 10·6·6(알림 기준, 크게) → 20·12·12
     return `<div class="mini"><div class="tfh">${TF_KO[tf]}</div>
       ${sub(EXTRA[0])}
-      <div class="sub keyset" title="알림 기준 설정"><div class="hd"><b>10·6·6 ★</b>${auxVal(v)}</div>${miniChart(v,58,true)}</div>
+      <div class="sub keyset" title="알림 기준 설정"><div class="hd"><b>10·6·6 ★</b>${auxVal(v)}</div>${miniChart(v,58,true)}${v.tr?`<div class="trkinfo t${v.tr.side}">${v.tr.side==="lo"?"30 출발":"70 출발"} · ${v.tr.side==="lo"?"골크":"데크"} ${v.tr.n}회 · 목표 %${v.tr.target} ${v.tr.goal} · ${v.tr.age===0?"이번 봉 시작":v.tr.age+"봉 전 시작"}${v.tr.age>=v.ds.length-1?" (차트 밖)":""}</div>`:""}</div>
       ${sub(EXTRA[1])}
       <div class="lg"><span><i style="background:var(--kline)"></i>%K</span><span><i style="background:var(--accent)"></i>%D</span><span>최근 ${v.ds.length}봉</span></div></div>`; }).join("")}</div>`;
 }
