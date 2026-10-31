@@ -307,8 +307,8 @@ tr.detail td{padding:6px 12px 16px;background:var(--sel);text-align:left;white-s
       <div class="legend">
         <span><span class="d nhot">68.4 <span class="ar">↗</span></span> 70 임박</span>
         <span><span class="d ncold">31.6 <span class="ar">↘</span></span> 30 임박</span>
-        <span><span class="d tlo">41.2</span> 관리 중 (30 출발)</span>
-        <span><span class="d thi">58.7</span> 관리 중 (70 출발)</span>
+        <span><span class="d tlo">41.2</span> 관리 중: 30 아래로 내려갔다가 아직 힘이 안 풀림 (반등이 70까지 가길 기다리는 중)</span>
+        <span><span class="d thi">58.7</span> 관리 중: 70 위로 올라갔다가 아직 힘이 안 풀림 (하락이 30까지 가길 기다리는 중)</span>
         <span><span class="x hot">돌파</span> <span class="x cold">돌파</span> 이번 봉에서 막 넘음</span>
         <span>펼친 10·6·6 차트의 <b>번호 점</b> = 셈한 골크(데크) 위치 · 세로 점선 = 관리 시작</span>
         <span><b>관리 중</b> = %D가 30/70 안으로 들어간 뒤 힘이 해소될 때까지. 골크(데크) 1번이면 %D, 2번 이상이면 %K가 반대편 70(30)에 닿으면 종료</span>
@@ -631,7 +631,7 @@ function cardHtml(x, tfs){
   let mid, foot; const g=groupOf(filter), cellFn = g==="trk"?trkCell:dCell;
   if(view==="all"){
     mid=`<div class="mc-tfs">${tfs.map(tf=>`<div class="mc-tf"><span class="lbl">${TF_NAME[tf]}</span>${cellFn(x.cs[tf])}</div>`).join("")}</div>`;
-    const info = g==="near" ? `<span>도달 예상 <b>${fmtEta(x.eta)}</b></span>` : g==="trk" ? `<span>목표까지 <b>${x.remain!=null?x.remain.toFixed(1):"–"}</b></span>` : "";
+    const info = g==="near" ? `<span>도달 예상 <b>${fmtEta(x.eta)}</b></span>` : "";
     foot=`<div class="mc-foot">${info}<span>거래대금 <b>${fmtTurn(x.turn)}</b></span>${links}</div>`;
   }else if(g==="trk"){
     const c=x.cs[view], v=results[x.s][view], t=c.tr;
@@ -738,14 +738,14 @@ function render(){
   $("#cards").innerHTML = "";
   let heads, body;
   if(view==="all"){
-    const extra = g==="near" ? ["eta","도달 예상"] : g==="trk" ? ["remain","목표까지<small>가장 가까운 봉</small>"] : null;
+    const extra = g==="near" ? ["eta","도달 예상"] : null;
     const cellFn = g==="trk" ? trkCell : dCell;
     heads=[["sym","종목"],["rank","시총"],["hits","해당 봉"],...tfs.map(tf=>[tf,TF_NAME[tf]+" D"]),...(extra?[extra]:[]),["chg","24h 등락"],["turn","24h 거래대금"]];
     body = rows.map(x=>{ const open=openSym===x.s;
       return `<tr class="row${open?" open":""}${newSet.has(x.s)?" new":""}" data-s="${x.s}" tabindex="0" aria-expanded="${open}">
         ${symCell(x.s,open)}<td class="rank">${x.rank?"#"+x.rank:"–"}</td><td class="c">${x.hits}/${tfs.length}</td>
         ${tfs.map((tf,i)=>`<td class="c${i===0?" gs":""}">${cellFn(x.cs[tf])}</td>`).join("")}
-        ${g==="near"?`<td class="c gs">${fmtEta(x.eta)}</td>`:g==="trk"?`<td class="c gs">${x.remain!=null?x.remain.toFixed(1):"–"}</td>`:""}
+        ${g==="near"?`<td class="c gs">${fmtEta(x.eta)}</td>`:""}
         <td class="${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</td><td>${fmtTurn(x.turn)}</td></tr>`
         + (open?detailRow(x.s,heads.length):""); }).join("");
   }else if(g==="trk"){
