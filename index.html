@@ -144,7 +144,21 @@ tr.detail td{padding:6px 12px 16px;background:var(--sel);text-align:left;white-s
 .log{max-height:640px;overflow:auto;padding:4px 0}
 .log div{padding:8px 16px;border-bottom:1px solid var(--line);font-size:14px;display:flex;gap:10px;align-items:baseline}
 .log time{font-family:var(--f-num);font-size:13px;color:var(--muted)}
-.legend{display:flex;gap:10px 16px;flex-wrap:wrap;font-size:13px;color:var(--muted);padding:8px 16px 14px;align-items:center}
+.legend{border-top:1px solid var(--line);padding:0 16px;font-size:13.5px;color:var(--muted)}
+.legend summary{cursor:pointer;padding:12px 0;font-weight:700;color:var(--fg);font-size:14px;list-style:none;display:flex;align-items:center;gap:6px}
+.legend summary::-webkit-details-marker{display:none}
+.legend summary::before{content:"▸";color:var(--muted);transition:transform .15s}
+.legend[open] summary::before{transform:rotate(90deg)}
+.lg-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px 32px;padding-bottom:16px}
+.lg-col{display:flex;flex-direction:column;gap:9px;min-width:0}
+.lg-h{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--muted);text-transform:uppercase;padding-bottom:2px;border-bottom:1px dashed var(--line)}
+.lg-row{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:center}
+.lg-row .d{justify-content:center;min-width:0}
+.lg-row b{display:block;color:var(--fg);font-size:13.5px}
+.lg-row small{display:block;font-size:12.5px;color:var(--muted);line-height:1.4}
+.legend ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.legend li{line-height:1.5}
+.legend li b{color:var(--fg)}
 .note{font-size:13px;color:var(--muted)}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:12px 18px;border-radius:10px;font-size:14px;max-width:min(560px,calc(100% - 32px));box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:20}
 .toast b{color:var(--accent)}
@@ -204,7 +218,9 @@ tr.detail td{padding:6px 12px 16px;background:var(--sel);text-align:left;white-s
   table{display:none}
   .cards{display:block}
   .tblbox{padding:0}
-  .legend{font-size:12px;padding:8px 12px 12px}
+  .legend{padding:0 12px}
+  .lg-grid{grid-template-columns:1fr;gap:14px}
+  .lg-row{grid-template-columns:84px 1fr}
   .log{max-height:280px}
   .card h2{padding:10px 12px}
 }
@@ -306,16 +322,28 @@ tr.detail td{padding:6px 12px 16px;background:var(--sel);text-align:left;white-s
         <div class="cards" id="cards"></div>
         <div class="empty" id="empty">‘감시 시작’을 누르면 첫 계산(약 1분)이 끝난 뒤 여기에 종목이 표시됩니다.</div>
       </div>
-      <div class="legend">
-        <span><span class="d nhot">68.4 <span class="ar">↗</span></span> 70 임박</span>
-        <span><span class="d ncold">31.6 <span class="ar">↘</span></span> 30 임박</span>
-        <span><span class="d tlo">41.2</span> 관리 중: 30 아래로 내려갔다가 아직 힘이 안 풀림 (반등이 70까지 가길 기다리는 중)</span>
-        <span><span class="d thi">58.7</span> 관리 중: 70 위로 올라갔다가 아직 힘이 안 풀림 (하락이 30까지 가길 기다리는 중)</span>
-        <span><span class="x hot">돌파</span> <span class="x cold">돌파</span> 이번 봉에서 막 넘음</span>
-        <span>펼친 10·6·6 차트의 <b>번호 점</b> = 셈한 골크(데크) 위치 · 세로 점선 = 관리 시작</span>
-        <span><b>관리 중</b> = %D가 30/70 안으로 들어간 뒤 힘이 해소될 때까지. 골크(데크) 1번이면 %D, 2번 이상이면 %K가 반대편 70(30)에 닿으면 종료</span>
-        <span>도달 예상 = 남은 거리 ÷ 직전 봉 대비 D 변화량 (참고값) · 종목명 클릭 → TradingView 링크 복사 · 행 클릭 → 미니 차트</span>
-      </div>
+      <details class="legend" id="legend" open>
+        <summary>표시 설명</summary>
+        <div class="lg-grid">
+          <div class="lg-col">
+            <div class="lg-h">숫자 칸 모양</div>
+            <div class="lg-row"><span class="d nhot">68.4 <span class="ar">↗</span></span><div><b>70 임박</b><small>67~70 사이, 오르는 중 (점선)</small></div></div>
+            <div class="lg-row"><span class="d ncold">31.6 <span class="ar">↘</span></span><div><b>30 임박</b><small>30~33 사이, 내리는 중 (점선)</small></div></div>
+            <div class="lg-row"><span class="d tlo">41.2</span><div><b>관리 중 · 30 출발</b><small>30 아래에 들어갔다가 아직 70까지 못 감 (실선)</small></div></div>
+            <div class="lg-row"><span class="d thi">58.7</span><div><b>관리 중 · 70 출발</b><small>70 위에 올라갔다가 아직 30까지 못 감 (실선)</small></div></div>
+            <div class="lg-row"><span class="d cold"><span class="x cold">돌파</span>28.9</span><div><b>방금 돌파</b><small>이번 봉에서 70/30을 막 넘음</small></div></div>
+          </div>
+          <div class="lg-col">
+            <div class="lg-h">규칙과 사용법</div>
+            <ul>
+              <li><b>관리 종료</b> · 골크(데크) 1번이면 %D, 2번 이상이면 %K가 반대편 70(30)에 닿을 때</li>
+              <li><b>차트 번호 점</b> · 센 골크·데크 위치 &nbsp;/&nbsp; <b>세로 점선</b> · 관리 시작 지점</li>
+              <li><b>도달 예상</b> · 남은 거리 ÷ 직전 봉 대비 D 변화량 (참고값)</li>
+              <li><b>종목명 클릭</b> · TradingView 링크 복사 &nbsp;/&nbsp; <b>행 클릭</b> · 차트 펼치기</li>
+            </ul>
+          </div>
+        </div>
+      </details>
     </section>
 
     <aside class="card">
@@ -846,6 +874,8 @@ async function wake(on){
 }
 $("#xthr").addEventListener("change",()=>{ if(running && !busy){ nextAt=0; toast("교차 인정 차이를 바꿨어요. 다시 계산합니다."); } else if(!running){ toast("감시를 시작하면 바뀐 기준으로 계산합니다."); } });
 $("#wake").addEventListener("change",()=>wake(running && $("#wake").checked));
+(function(){ const lg=$("#legend"); try{ const v=localStorage.getItem("legendOpen"); if(v!=null) lg.open = v==="1"; else lg.open = !MQ.matches; }catch(e){ lg.open = !MQ.matches; }
+  lg.addEventListener("toggle",()=>{ try{ localStorage.setItem("legendOpen", lg.open?"1":"0"); }catch(e){} }); })();
 $("#clr").addEventListener("click",()=>{ $("#log").innerHTML='<div class="note">기록을 지웠어요.</div>'; });
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ document.title="Bybit 스토캐스틱 알림판"; if(running) wake(true); } });
 
