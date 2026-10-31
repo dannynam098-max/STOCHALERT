@@ -196,6 +196,34 @@ tr.detail td{padding:6px 12px 16px;background:var(--sel);text-align:left;white-s
   .log{max-height:280px}
   .card h2{padding:10px 12px}
 }
+.only-d{display:none}
+@media (min-width:721px){
+  .only-d{display:inline-block}
+  .only-m{display:inline-block}
+  .bar.shut .opts{display:none}
+  .bar{row-gap:10px}
+  .status #logBtn{margin-left:auto;order:9}
+  .main{grid-template-columns:minmax(0,1fr) 270px}
+  .main.nolog{grid-template-columns:minmax(0,1fr)}
+  .main.nolog > aside{display:none}
+  .tblbox{max-height:max(440px,calc(100vh - 230px));overflow:auto}
+  th{position:sticky;top:0;z-index:2;box-shadow:0 1px 0 var(--line);padding-top:12px;padding-bottom:12px}
+  th.c,td.c{text-align:center}
+  td.c .d{justify-content:center}
+  th.gs,td.gs{border-left:1px solid var(--line)}
+  td{padding-top:11px;padding-bottom:11px}
+  th,td{padding-left:10px;padding-right:10px}
+  th small{display:block;font-size:11px;font-weight:500;opacity:.8}
+  .main{grid-template-columns:minmax(0,1fr) 270px}
+  .log div{display:grid;grid-template-columns:auto 1fr auto;align-items:center}
+  td .d{min-width:68px}
+  .log .badge{font-size:11.5px;padding:1px 7px}
+  .log div{gap:8px}
+  td.sym .links{opacity:.45;transition:opacity .15s}
+  tbody tr.row:hover td.sym .links{opacity:1}
+  .log{max-height:max(440px,calc(100vh - 230px))}
+  .log div{padding:7px 14px;font-size:13.5px}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -242,6 +270,7 @@ tr.detail td{padding:6px 12px 16px;background:var(--sel);text-align:left;white-s
     <span>대상 <b id="cnt">–</b>종목</span>
     <span>마지막 갱신 <b id="last">–</b></span>
     <span>다음 갱신까지 <b id="next">–</b></span>
+    <button class="btn ghost only-d" id="logBtn" aria-pressed="true">알림 기록 숨기기</button>
     <div class="prog"><i id="bar"></i></div>
   </div>
 
@@ -469,7 +498,7 @@ const KIND_TXT = {xhot:"70 돌파", xcold:"30 돌파", nhot:"70 임박", ncold:"
 function addLog({s,tf,c,kind}){
   const el=document.createElement("div");
   const t=new Date().toTimeString().slice(0,5);
-  el.innerHTML = `<time>${t}</time><span><b>${s.replace(/USDT$/,"")}</b> ${TF_NAME[tf]} · D ${c.d.toFixed(1)} <span class="badge b-${kind}">${KIND_TXT[kind]}</span></span>`;
+  el.innerHTML = `<time>${t}</time><span><b>${s.replace(/USDT$/,"")}</b> ${TF_NAME[tf]} · ${c.d.toFixed(1)}</span><span class="badge b-${kind}">${KIND_TXT[kind]}</span>`;
   const log=$("#log"); if(log.firstElementChild?.classList.contains("note")) log.innerHTML="";
   log.prepend(el); while(log.children.length>300) log.lastChild.remove();
 }
@@ -504,7 +533,7 @@ function miniChart(v, H=96, near=true){
   </svg>`;
 }
 function spark(v){   // 표 안의 작은 D 추이(최근 20봉)
-  const ds=v.ds.slice(-20), W=96,H=30, n=ds.length, x=i=>1+(W-2)*i/(n-1), y=val=>1+(H-2)*(1-val/100);
+  const ds=v.ds.slice(-20), W=80,H=28, n=ds.length, x=i=>1+(W-2)*i/(n-1), y=val=>1+(H-2)*(1-val/100);
   const pts=ds.map((val,i)=>val==null?null:`${x(i).toFixed(1)},${y(val).toFixed(1)}`).filter(Boolean).join(" ");
   const last=ds[n-1], col=last>=HI-margin()?"var(--hot)":last<=LO+margin()?"var(--cold)":"var(--muted)";
   return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">
@@ -629,30 +658,32 @@ function render(){
   $("#cards").innerHTML = "";
   let heads, body;
   if(view==="all"){
-    heads=[["sym","종목"],["rank","시총 순위"],["hits","해당 봉"],...tfs.map(tf=>[tf,TF_NAME[tf]+" D"]),["eta","도달 예상"],["chg","24h 등락"],["turn","24h 거래대금"]];
+    heads=[["sym","종목"],["rank","시총"],["hits","해당 봉"],...tfs.map(tf=>[tf,TF_NAME[tf]+" D"]),["eta","도달 예상"],["chg","24h 등락"],["turn","24h 거래대금"]];
     body = rows.map(x=>{ const open=openSym===x.s;
       return `<tr class="row${open?" open":""}${newSet.has(x.s)?" new":""}" data-s="${x.s}" tabindex="0" aria-expanded="${open}">
-        ${symCell(x.s,open)}<td class="rank">${x.rank?"#"+x.rank:"–"}</td><td>${x.hits}/${tfs.length}</td>
-        ${tfs.map(tf=>`<td>${dCell(x.cs[tf])}</td>`).join("")}
-        <td>${x.eta!=null&&x.eta<0?"돌파함":fmtEta(x.eta)}</td>
+        ${symCell(x.s,open)}<td class="rank">${x.rank?"#"+x.rank:"–"}</td><td class="c">${x.hits}/${tfs.length}</td>
+        ${tfs.map((tf,i)=>`<td class="c${i===0?" gs":""}">${dCell(x.cs[tf])}</td>`).join("")}
+        <td class="c gs">${x.eta!=null&&x.eta<0?"돌파함":fmtEta(x.eta)}</td>
         <td class="${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</td><td>${fmtTurn(x.turn)}</td></tr>`
         + (open?detailRow(x.s,heads.length):""); }).join("");
   }else{
-    heads=[["sym","종목"],["rank","시총 순위"],["state","상태"],["spark","D 추이(20봉)"],["d","%D"],["pd","직전 D"],["slope","변화"],["eta","도달 예상"],["k","%K"],["aux","보조 D (5·3·3 / 20·12·12)"],["chg","24h 등락"],["turn","24h 거래대금"]];
+    heads=[["sym","종목"],["rank","시총"],["state","상태"],["spark","D 추이<small>최근 20봉</small>"],["d","%D"],["pd","직전 D"],["slope","변화"],["eta","도달 예상"],["k","%K"],["aux","보조 D<small>5·3·3 / 20·12·12</small>"],["chg","24h 등락"],["turn","24h 거래대금"]];
     body = rows.map(x=>{ const open=openSym===x.s, c=x.cs[view], v=results[x.s][view];
       return `<tr class="row${open?" open":""}${newSet.has(x.s)?" new":""}" data-s="${x.s}" tabindex="0" aria-expanded="${open}">
         ${symCell(x.s,open)}<td class="rank">${x.rank?"#"+x.rank:"–"}</td>
-        <td class="l">${badge(c)}</td><td>${spark(v)}</td>
-        <td>${dCell(c)}</td><td class="muted">${c.pd.toFixed(1)}</td>
+        <td class="c">${badge(c)}</td><td class="c">${spark(v)}</td>
+        <td class="c gs">${dCell(c)}</td><td class="muted">${c.pd.toFixed(1)}</td>
         <td class="${c.slope>=0?"up":"dn"}">${c.slope>=0?"+":""}${c.slope.toFixed(1)}</td>
-        <td>${c.cross?"돌파함":fmtEta(c.eta)}</td>
+        <td class="c">${c.cross?"돌파함":fmtEta(c.eta)}</td>
         <td class="muted">${v.ks.at(-1)?.toFixed(1)??"–"}</td>
-        <td>${EXTRA.map(e=>auxVal(v.ex?.[e.key])).join('<span class="muted"> / </span>')}</td>
+        <td class="c gs">${EXTRA.map(e=>auxVal(v.ex?.[e.key])).join('<span class="muted"> / </span>')}</td>
         <td class="${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</td><td>${fmtTurn(x.turn)}</td></tr>`
         + (open?detailRow(x.s,heads.length):""); }).join("");
   }
+  const CENTER = new Set(["hits","eta","state","spark","d","aux",...TFS]);
+  const GSTART = k => (view==="all" ? (k===tfs[0]||k==="eta") : (k==="d"||k==="aux"));
   const sortable = new Set(["sym","rank","hits","eta","chg","turn","d","slope",...tfs]);
-  $("#thead").innerHTML = heads.map(([k,n])=>`<th data-k="${sortable.has(k)?k:""}" scope="col" class="${sortKey===k?"on":""} ${["state"].includes(k)?"l":""}">${n}${sortKey===k?(sortDir<0?" ▾":" ▴"):""}</th>`).join("");
+  $("#thead").innerHTML = heads.map(([k,n])=>`<th data-k="${sortable.has(k)?k:""}" scope="col" class="${sortKey===k?"on":""} ${CENTER.has(k)?"c":""} ${GSTART(k)?"gs":""}">${n}${sortKey===k?(sortDir<0?" ▾":" ▴"):""}</th>`).join("");
   $("#tbody").innerHTML = body;
   $("#empty").hidden = rows.length>0;
   if(Object.keys(results).length && !rows.length) $("#empty").textContent="지금은 이 조건에 맞는 종목이 없어요.";
@@ -689,8 +720,16 @@ $(".tblbox").addEventListener("keydown",e=>{ if((e.key==="Enter"||e.key===" ") &
 $("#thead").addEventListener("click",e=>{ const k=e.target.closest("th")?.dataset.k; if(!k)return;
   if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir = (k==="sym"||k==="rank"||k==="eta")?1:-1; } save(); render(); });
 $("#sortSel").addEventListener("change",e=>{ sortKey=e.target.value; sortDir = SORTS[sortKey]?.[1] ?? -1; save(); render(); });
-$("#optBtn").addEventListener("click",()=>{ const open=$(".bar").classList.toggle("open");
-  $("#optBtn").setAttribute("aria-expanded",open); $("#optBtn").textContent = open?"⚙ 설정 접기":"⚙ 설정 펼치기"; });
+function setOpt(open){ $(".bar").classList.toggle("open",open); $(".bar").classList.toggle("shut",!open);
+  $("#optBtn").setAttribute("aria-expanded",open); $("#optBtn").textContent = open?"⚙ 설정 접기":"⚙ 설정 펼치기"; }
+$("#optBtn").addEventListener("click",()=>{ const open=!$(".bar").classList.contains("open"); setOpt(open);
+  if(!MQ.matches){ try{ localStorage.setItem("deskOpt", open?"1":"0"); }catch(e){} } });
+function setLog(show){ $(".main").classList.toggle("nolog",!show); $("#logBtn").textContent = show?"알림 기록 숨기기":"알림 기록 보기";
+  $("#logBtn").setAttribute("aria-pressed",show); }
+$("#logBtn").addEventListener("click",()=>{ const show=$(".main").classList.contains("nolog"); setLog(show);
+  try{ localStorage.setItem("deskLog", show?"1":"0"); }catch(e){} });
+(function initLayout(){ let o="1", l="1"; try{ o=localStorage.getItem("deskOpt")??"1"; l=localStorage.getItem("deskLog")??"1"; }catch(e){}
+  setOpt(!MQ.matches && o==="1"); setLog(l==="1"); })();
 
 // 화면 켜두기 (휴대폰에서 감시 중 화면이 꺼지면 계산이 멈추기 때문)
 let wakeLock=null;
