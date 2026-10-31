@@ -379,13 +379,13 @@ function stoch(h,l,c,kLen=K_LEN,kSm=K_SMOOTH,dSm=D_SMOOTH){
 // 보기용 보조 스토캐스틱 (알림 없음): 펼친 차트와 봉별 탭에서만 표시
 const EXTRA = [
   {key:"s5",  label:"5·3·3",  k:5,  ks:3, ds:3},
-  {key:"s20", label:"20·6·6", k:20, ks:6, ds:6},
+  {key:"s20", label:"20·12·12", k:20, ks:12, ds:12},
 ];
 function sma(a,len){ const o=new Array(a.length).fill(NaN);
   for(let i=len-1;i<a.length;i++){ let s=0,ok=true; for(let j=i-len+1;j<=i;j++){ if(isNaN(a[j])){ok=false;break} s+=a[j]; } if(ok)o[i]=s/len; } return o; }
 
 async function calc(sym, tf){
-  const r = await getJSON(`${API}/v5/market/kline?category=linear&symbol=${sym}&interval=${tf}&limit=80`);
+  const r = await getJSON(`${API}/v5/market/kline?category=linear&symbol=${sym}&interval=${tf}&limit=100`);
   let rows = r.list.slice().reverse();
   if(!$("#live").checked) rows = rows.slice(0,-1);
   if(rows.length < K_LEN+K_SMOOTH+D_SMOOTH) return null;
@@ -638,7 +638,7 @@ function render(){
         <td class="${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</td><td>${fmtTurn(x.turn)}</td></tr>`
         + (open?detailRow(x.s,heads.length):""); }).join("");
   }else{
-    heads=[["sym","종목"],["rank","시총 순위"],["state","상태"],["spark","D 추이(20봉)"],["d","%D"],["pd","직전 D"],["slope","변화"],["eta","도달 예상"],["k","%K"],["aux","보조 D (5·3·3 / 20·6·6)"],["chg","24h 등락"],["turn","24h 거래대금"]];
+    heads=[["sym","종목"],["rank","시총 순위"],["state","상태"],["spark","D 추이(20봉)"],["d","%D"],["pd","직전 D"],["slope","변화"],["eta","도달 예상"],["k","%K"],["aux","보조 D (5·3·3 / 20·12·12)"],["chg","24h 등락"],["turn","24h 거래대금"]];
     body = rows.map(x=>{ const open=openSym===x.s, c=x.cs[view], v=results[x.s][view];
       return `<tr class="row${open?" open":""}${newSet.has(x.s)?" new":""}" data-s="${x.s}" tabindex="0" aria-expanded="${open}">
         ${symCell(x.s,open)}<td class="rank">${x.rank?"#"+x.rank:"–"}</td>
