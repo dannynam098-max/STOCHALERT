@@ -112,12 +112,22 @@ td.sym .caret{display:inline-block;width:14px;color:var(--muted);font-size:11px}
 .up{color:var(--hot)} .dn{color:var(--cold)}
 
 tr.detail td{padding:6px 12px 16px;background:var(--sel);text-align:left;white-space:normal}
-.minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
+.minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:12px}
+.mini .hd{gap:6px} .mini .hd>span,.mini .hd>b{white-space:nowrap}
 .mini{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px 6px}
 .mini .hd{display:flex;justify-content:space-between;font-size:13px;font-family:var(--f-ui);margin-bottom:2px}
 .mini .hd b{font-size:14px}
 .mini .hd span{font-family:var(--f-num);color:var(--muted)}
 .mini svg{display:block;width:100%;height:auto}
+.mini .hd .set{font-family:var(--f-num);font-size:11px;font-weight:600;color:var(--muted);margin-left:4px}
+.mini .sub{margin-top:6px;padding-top:5px;border-top:1px dashed var(--line)}
+.mini .sub .hd{font-size:12px;margin-bottom:1px}
+.mini .sub .hd b{font-size:12px;font-family:var(--f-num);color:var(--muted)}
+.aux{font-family:var(--f-num);font-weight:600;font-size:13.5px}
+.aux i{font-style:normal;font-family:var(--f-ui);font-size:11px;margin-left:2px}
+.aux.hot{color:var(--hot)} .aux.cold{color:var(--cold)} .aux.mid{color:var(--fg)}
+.mc-aux{display:flex;gap:14px;flex-wrap:wrap;font-size:13px}
+.mc-aux .lbl{font-family:var(--f-num);font-size:11.5px}
 .mini .lg{display:flex;gap:12px;font-size:12px;color:var(--muted);font-family:var(--f-ui)}
 .mini .lg i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:4px;border-radius:2px}
 .empty{padding:32px 16px;color:var(--muted);text-align:center}
@@ -357,15 +367,20 @@ function coinOf(sym){ return (bases[sym]||sym.replace(/USDT$/,"")).replace(/^(10
 function rankOf(sym){ return mcap[coinOf(sym)] || null; }
 
 // ===== 스토캐스틱 계산 (TradingView 'Stoch'와 같은 방식) =====
-function stoch(h,l,c){
+function stoch(h,l,c,kLen=K_LEN,kSm=K_SMOOTH,dSm=D_SMOOTH){
   const n=c.length, raw=new Array(n).fill(NaN);
-  for(let i=K_LEN-1;i<n;i++){
+  for(let i=kLen-1;i<n;i++){
     let hh=-Infinity, ll=Infinity;
-    for(let j=i-K_LEN+1;j<=i;j++){ if(h[j]>hh)hh=h[j]; if(l[j]<ll)ll=l[j]; }
+    for(let j=i-kLen+1;j<=i;j++){ if(h[j]>hh)hh=h[j]; if(l[j]<ll)ll=l[j]; }
     raw[i] = hh===ll ? NaN : (c[i]-ll)/(hh-ll)*100;
   }
-  const k = sma(raw,K_SMOOTH); return {k, d: sma(k,D_SMOOTH)};
+  const k = sma(raw,kSm); return {k, d: sma(k,dSm)};
 }
+// 보기용 보조 스토캐스틱 (알림 없음): 펼친 차트와 봉별 탭에서만 표시
+const EXTRA = [
+  {key:"s5",  label:"5·3·3",  k:5,  ks:3, ds:3},
+  {key:"s20", label:"20·6·6", k:20, ks:6, ds:6},
+];
 function sma(a,len){ const o=new Array(a.length).fill(NaN);
   for(let i=len-1;i<a.length;i++){ let s=0,ok=true; for(let j=i-len+1;j<=i;j++){ if(isNaN(a[j])){ok=false;break} s+=a[j]; } if(ok)o[i]=s/len; } return o; }
 
@@ -374,11 +389,15 @@ async function calc(sym, tf){
   let rows = r.list.slice().reverse();
   if(!$("#live").checked) rows = rows.slice(0,-1);
   if(rows.length < K_LEN+K_SMOOTH+D_SMOOTH) return null;
-  const {k,d:dArr} = stoch(rows.map(x=>+x[2]), rows.map(x=>+x[3]), rows.map(x=>+x[4]));
+  const H=rows.map(x=>+x[2]), L=rows.map(x=>+x[3]), C=rows.map(x=>+x[4]);
+  const {k,d:dArr} = stoch(H,L,C);
   const n=dArr.length, d=dArr[n-1], pd=dArr[n-2];
   if(isNaN(d)||isNaN(pd)) return null;
   const round = a => a.slice(-SERIES_LEN).map(v=>isNaN(v)?null:Math.round(v*10)/10);
-  return {d, pd, ks:round(k), ds:round(dArr)};
+  const ex = {};
+  EXTRA.forEach(e=>{ const r2=stoch(H,L,C,e.k,e.ks,e.ds), dd=r2.d[n-1], pp=r2.d[n-2];
+    ex[e.key] = isNaN(dd) ? null : {d:dd, pd:pp, ks:round(r2.k), ds:round(r2.d)}; });
+  return {d, pd, ks:round(k), ds:round(dArr), ex};
 }
 
 // ===== 신호 판정 =====
@@ -468,8 +487,8 @@ function notify(list){
 }
 
 // ===== 차트 그리기 (SVG) =====
-function miniChart(v){
-  const W=260,H=96,P=4, n=v.ds.length, x=i=>P+(W-2*P)*i/(n-1), y=val=>P+(H-2*P)*(1-val/100);
+function miniChart(v, H=96, near=true){
+  const W=260,P=4, n=v.ds.length, x=i=>P+(W-2*P)*i/(n-1), y=val=>P+(H-2*P)*(1-val/100);
   const path=a=>a.map((val,i)=>val==null?null:`${x(i).toFixed(1)},${y(val).toFixed(1)}`).filter(Boolean).join(" ");
   const last=v.ds[n-1], col=last>=HI?"var(--hot)":last<=LO?"var(--cold)":"var(--accent)", m=margin();
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="스토캐스틱 K, D 선">
@@ -477,8 +496,8 @@ function miniChart(v){
     <rect x="${P}" y="${y(LO)}" width="${W-2*P}" height="${y(0)-y(LO)}" fill="var(--cold-bg)"/>
     <line x1="${P}" x2="${W-P}" y1="${y(HI)}" y2="${y(HI)}" stroke="var(--hot)" stroke-dasharray="3 3" stroke-width="1"/>
     <line x1="${P}" x2="${W-P}" y1="${y(LO)}" y2="${y(LO)}" stroke="var(--cold)" stroke-dasharray="3 3" stroke-width="1"/>
-    <line x1="${P}" x2="${W-P}" y1="${y(HI-m)}" y2="${y(HI-m)}" stroke="var(--hot)" stroke-opacity=".35" stroke-width="1"/>
-    <line x1="${P}" x2="${W-P}" y1="${y(LO+m)}" y2="${y(LO+m)}" stroke="var(--cold)" stroke-opacity=".35" stroke-width="1"/>
+    ${near?`<line x1="${P}" x2="${W-P}" y1="${y(HI-m)}" y2="${y(HI-m)}" stroke="var(--hot)" stroke-opacity=".35" stroke-width="1"/>
+    <line x1="${P}" x2="${W-P}" y1="${y(LO+m)}" y2="${y(LO+m)}" stroke="var(--cold)" stroke-opacity=".35" stroke-width="1"/>`:""}
     <polyline points="${path(v.ks)}" fill="none" stroke="var(--kline)" stroke-width="1.3"/>
     <polyline points="${path(v.ds)}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linejoin="round"/>
     <circle cx="${x(n-1)}" cy="${y(last)}" r="3.5" fill="${col}"/>
@@ -497,8 +516,18 @@ function spark(v){   // 표 안의 작은 D 추이(최근 20봉)
 function miniGrid(s){
   return `<div class="minis">${activeTfs().map(tf=>{ const v=results[s]?.[tf];
     if(!v) return `<div class="mini"><div class="hd"><b>${TF_KO[tf]}</b><span>데이터 부족</span></div></div>`;
-    return `<div class="mini"><div class="hd"><b>${TF_KO[tf]}</b><span><em class="kv" style="font-style:normal">K ${v.ks.at(-1)?.toFixed(1)} · </em>D ${v.d.toFixed(1)}</span></div>${miniChart(v)}
+    const subs = EXTRA.map(e=>{ const x=v.ex?.[e.key];
+      if(!x) return `<div class="sub"><div class="hd"><b>${e.label}</b><span>데이터 부족</span></div></div>`;
+      return `<div class="sub"><div class="hd"><b>${e.label}</b>${auxVal(x)}</div>${miniChart(x,58,false)}</div>`; }).join("");
+    return `<div class="mini"><div class="hd"><b>${TF_KO[tf]} <span class="set">10·6·6</span></b><span><em class="kv" style="font-style:normal">K ${v.ks.at(-1)?.toFixed(1)} · </em>D ${v.d.toFixed(1)}</span></div>${miniChart(v)}
+      ${subs}
       <div class="lg"><span><i style="background:var(--kline)"></i>%K</span><span><i style="background:var(--accent)"></i>%D</span><span>최근 ${v.ds.length}봉</span></div></div>`; }).join("")}</div>`;
+}
+// 보조 설정의 현재 D + 방향 (예: 72.1↗)
+function auxVal(x){
+  if(!x) return `<span class="aux mid">–</span>`;
+  const c = x.d>=HI?"hot":x.d<=LO?"cold":"mid", up = x.d>=x.pd;
+  return `<span class="aux ${c}">${x.d.toFixed(1)}<i>${up?"↗":"↘"}</i></span>`;
 }
 const detailRow = (s, colspan) => `<tr class="detail"><td colspan="${colspan}">${miniGrid(s)}</td></tr>`;
 
@@ -514,7 +543,8 @@ function cardHtml(x, tfs){
     foot=`<div class="mc-foot"><span>도달 예상 <b>${x.eta!=null&&x.eta<0?"돌파함":fmtEta(x.eta)}</b></span><span>거래대금 <b>${fmtTurn(x.turn)}</b></span>${links}</div>`;
   }else{
     const c=x.cs[view], v=results[x.s][view];
-    mid=`<div class="mc-mid">${badge(c)}${spark(v)}${dCell(c)}</div>`;
+    mid=`<div class="mc-mid">${badge(c)}${spark(v)}${dCell(c)}</div>
+      <div class="mc-aux">${EXTRA.map(e=>`<span><span class="lbl">${e.label}</span> ${auxVal(v.ex?.[e.key])}</span>`).join("")}</div>`;
     foot=`<div class="mc-foot"><span>직전 <b>${c.pd.toFixed(1)}</b></span><span>변화 <b class="${c.slope>=0?"up":"dn"}">${c.slope>=0?"+":""}${c.slope.toFixed(1)}</b></span><span>도달 <b>${c.cross?"돌파함":fmtEta(c.eta)}</b></span><span>거래대금 <b>${fmtTurn(x.turn)}</b></span>${links}</div>`;
   }
   return `<div class="mc${open?" open":""}${newSet.has(x.s)?" new":""}" data-s="${x.s}" tabindex="0" role="button" aria-expanded="${open}">${top}${mid}${foot}${open?miniGrid(x.s):""}</div>`;
@@ -608,7 +638,7 @@ function render(){
         <td class="${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</td><td>${fmtTurn(x.turn)}</td></tr>`
         + (open?detailRow(x.s,heads.length):""); }).join("");
   }else{
-    heads=[["sym","종목"],["rank","시총 순위"],["state","상태"],["spark","D 추이(20봉)"],["d","%D"],["pd","직전 D"],["slope","변화"],["eta","도달 예상"],["k","%K"],["chg","24h 등락"],["turn","24h 거래대금"]];
+    heads=[["sym","종목"],["rank","시총 순위"],["state","상태"],["spark","D 추이(20봉)"],["d","%D"],["pd","직전 D"],["slope","변화"],["eta","도달 예상"],["k","%K"],["aux","보조 D (5·3·3 / 20·6·6)"],["chg","24h 등락"],["turn","24h 거래대금"]];
     body = rows.map(x=>{ const open=openSym===x.s, c=x.cs[view], v=results[x.s][view];
       return `<tr class="row${open?" open":""}${newSet.has(x.s)?" new":""}" data-s="${x.s}" tabindex="0" aria-expanded="${open}">
         ${symCell(x.s,open)}<td class="rank">${x.rank?"#"+x.rank:"–"}</td>
@@ -617,6 +647,7 @@ function render(){
         <td class="${c.slope>=0?"up":"dn"}">${c.slope>=0?"+":""}${c.slope.toFixed(1)}</td>
         <td>${c.cross?"돌파함":fmtEta(c.eta)}</td>
         <td class="muted">${v.ks.at(-1)?.toFixed(1)??"–"}</td>
+        <td>${EXTRA.map(e=>auxVal(v.ex?.[e.key])).join('<span class="muted"> / </span>')}</td>
         <td class="${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</td><td>${fmtTurn(x.turn)}</td></tr>`
         + (open?detailRow(x.s,heads.length):""); }).join("");
   }
