@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bybit 스토캐스틱 알림판</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;600;700&display=swap">
+<style>
+/* 레이아웃: 조작바 → 상태줄 → 봉 탭(종합/1H/4H/1D/1W) → 신호 필터 + 정렬 → 표(행 클릭 시 미니 차트) + 오른쪽 알림 기록 */
+:root{
+  --bg:#eef0f4; --panel:#ffffff; --row-alt:#f7f8fb; --line:#d9dde6; --fg:#141a26; --muted:#5b6578;
+  --accent:#c97a0e; --accent-fg:#1b1306;
+  --hot:#d11f3c; --hot-bg:#ffe1e6;     /* 70 쪽 (과매수) */
+  --cold:#1d5cd1; --cold-bg:#dce8ff;   /* 30 쪽 (과매도) */
+  --kline:#8a93a6; --flash:#fff1c9; --sel:#fff8e6;
+  --f-ui:"IBM Plex Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;
+  --f-num:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#10141d; --panel:#181e2b; --row-alt:#1c2333; --line:#2b3446; --fg:#eef1f7; --muted:#9aa4b8;
+  --accent:#f2a33a; --accent-fg:#1b1306; --hot:#ff6d82; --hot-bg:#40202b; --cold:#71a6ff; --cold-bg:#182a4d;
+  --kline:#7d879b; --flash:#3d3315; --sel:#2a2618; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10141d; --panel:#181e2b; --row-alt:#1c2333; --line:#2b3446; --fg:#eef1f7; --muted:#9aa4b8;
+  --accent:#f2a33a; --accent-fg:#1b1306; --hot:#ff6d82; --hot-bg:#40202b; --cold:#71a6ff; --cold-bg:#182a4d;
+  --kline:#7d879b; --flash:#3d3315; --sel:#2a2618; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 var(--f-ui)}
+.wrap{max-width:1400px;margin:0 auto;padding:22px 16px 56px;display:flex;flex-direction:column;gap:14px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px}
+h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em}
+h1 b{color:var(--accent)}
+.sub{color:var(--muted);font-size:14px}
+.bar{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center}
+.grp{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.lbl{font-size:13px;color:var(--muted);font-weight:500}
+button,select,input{font:inherit;color:var(--fg)}
+select,input[type=number]{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:14px}
+input[type=number]{width:72px;font-family:var(--f-num)}
+.chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;cursor:pointer;user-select:none;background:var(--bg);font-size:14px}
+.chip input{accent-color:var(--accent);margin:0;width:15px;height:15px}
+.btn{border:0;border-radius:9px;padding:9px 18px;font-weight:700;cursor:pointer;background:var(--accent);color:var(--accent-fg);font-size:15px}
+.btn.stop{background:var(--fg);color:var(--bg)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--fg);font-weight:500;padding:3px 10px;font-size:13px}
+button:focus-visible,select:focus-visible,input:focus-visible,.chip:focus-within,tr:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.status{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center;font-size:14px;color:var(--muted);padding:0 4px}
+.status b{color:var(--fg);font-family:var(--f-num);font-weight:600}
+.prog{flex:1 1 160px;height:5px;background:var(--line);border-radius:3px;overflow:hidden;min-width:120px}
+.prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start}
+@media (max-width:1040px){.main{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;min-width:0}
+.card h2{margin:0;font-size:15px;font-weight:700;padding:12px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* 봉 탭 */
+.views{display:flex;gap:0;border-bottom:1px solid var(--line);padding:0 10px;overflow-x:auto}
+.view{border:0;background:none;padding:12px 16px 10px;font-size:15px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+.view:hover{color:var(--fg)}
+.view[aria-selected=true]{color:var(--fg);border-bottom-color:var(--accent)}
+.view .n{font-family:var(--f-num);font-weight:500;font-size:12px;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--bg);color:var(--muted)}
+
+.toolbar{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 16px 4px;align-items:center}
+.tabs{display:flex;gap:5px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:5px 12px;cursor:pointer;font-size:14px}
+.tab[aria-pressed=true]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.tab .n{font-family:var(--f-num);margin-left:5px;opacity:.8;font-size:13px}
+.tab.sep{margin-left:8px}
+.tblbox{overflow-x:auto;padding:6px 0 4px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:10px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+th{font-size:13px;color:var(--muted);font-weight:700;cursor:pointer;background:var(--panel);user-select:none}
+th:hover{color:var(--fg)}
+th.on{color:var(--accent)}
+th:first-child,td:first-child{text-align:left}
+th.l,td.l{text-align:left}
+td{font-family:var(--f-num);font-size:14.5px}
+tbody tr.row{cursor:pointer}
+tbody tr.row:nth-child(even) td{background:var(--row-alt)}
+tbody tr.row:hover td{background:var(--sel)}
+tbody tr.row.open td{background:var(--sel)}
+tr.new td{box-shadow:inset 0 0 0 9999px var(--flash)}
+td.sym{font-family:var(--f-ui)}
+td.sym .nm{font-weight:700;font-size:15.5px;color:var(--fg);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+td.sym .nm:hover{color:var(--accent);text-decoration-color:var(--accent)}
+td.sym .links{font-size:12px;margin-left:8px;display:inline-flex;gap:8px}
+td.sym .links a{color:var(--muted)}
+td.sym .caret{display:inline-block;width:14px;color:var(--muted);font-size:11px}
+.rank,.muted{color:var(--muted)}
+
+/* D 값 표시: 구간 안 = 채움, 임박 = 점선 테두리 */
+.d{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:6px;min-width:76px;justify-content:flex-end;font-size:14.5px;border:1.5px solid transparent}
+.d.hot{background:var(--hot-bg);color:var(--hot);font-weight:700}
+.d.cold{background:var(--cold-bg);color:var(--cold);font-weight:700}
+.d.nhot{border:1.5px dashed var(--hot);color:var(--hot);font-weight:700}
+.d.ncold{border:1.5px dashed var(--cold);color:var(--cold);font-weight:700}
+.d.mid{color:var(--muted)}
+.x{font-size:11px;font-family:var(--f-ui);border-radius:4px;padding:0 5px;color:#fff;font-weight:700}
+.x.hot{background:var(--hot)} .x.cold{background:var(--cold)}
+.ar{font-size:12px;font-family:var(--f-ui)}
+
+/* 상태 배지 (봉별 탭) */
+.badge{display:inline-block;font-family:var(--f-ui);font-size:13px;font-weight:700;padding:2px 9px;border-radius:999px;border:1.5px solid transparent}
+.b-nhot{border:1.5px dashed var(--hot);color:var(--hot)}
+.b-ncold{border:1.5px dashed var(--cold);color:var(--cold)}
+.b-xhot{background:var(--hot);color:#fff}
+.b-xcold{background:var(--cold);color:#fff}
+.b-hot{background:var(--hot-bg);color:var(--hot)}
+.b-cold{background:var(--cold-bg);color:var(--cold)}
+.spark{display:block}
+.up{color:var(--hot)} .dn{color:var(--cold)}
+
+tr.detail td{padding:6px 12px 16px;background:var(--sel);text-align:left;white-space:normal}
+.minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
+.mini{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px 6px}
+.mini .hd{display:flex;justify-content:space-between;font-size:13px;font-family:var(--f-ui);margin-bottom:2px}
+.mini .hd b{font-size:14px}
+.mini .hd span{font-family:var(--f-num);color:var(--muted)}
+.mini svg{display:block;width:100%;height:auto}
+.mini .lg{display:flex;gap:12px;font-size:12px;color:var(--muted);font-family:var(--f-ui)}
+.mini .lg i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:4px;border-radius:2px}
+.empty{padding:32px 16px;color:var(--muted);text-align:center}
+.log{max-height:640px;overflow:auto;padding:4px 0}
+.log div{padding:8px 16px;border-bottom:1px solid var(--line);font-size:14px;display:flex;gap:10px;align-items:baseline}
+.log time{font-family:var(--f-num);font-size:13px;color:var(--muted)}
+.legend{display:flex;gap:10px 16px;flex-wrap:wrap;font-size:13px;color:var(--muted);padding:8px 16px 14px;align-items:center}
+.note{font-size:13px;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:12px 18px;border-radius:10px;font-size:14px;max-width:min(560px,calc(100% - 32px));box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:20}
+.toast b{color:var(--accent)}
+.opts{display:contents}
+.only-m{display:none}
+.cards{display:none}
+.mc{border-bottom:1px solid var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:9px;cursor:pointer}
+.mc:nth-child(even){background:var(--row-alt)}
+.mc.open{background:var(--sel)}
+.mc.new{box-shadow:inset 4px 0 0 var(--accent)}
+.mc-top{display:flex;align-items:center;gap:8px;min-width:0}
+.mc-top .nm{font-weight:700;font-size:17px;color:var(--fg);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;font-family:var(--f-ui)}
+.mc-top .rank{font-family:var(--f-num);font-size:13px}
+.mc-top .sp{flex:1}
+.mc-top .chg{font-family:var(--f-num);font-size:14px;font-weight:600}
+.mc-tfs{display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));gap:6px}
+.mc-tf{display:flex;flex-direction:column;align-items:stretch;gap:2px}
+.mc-tf .lbl{font-size:11.5px;text-align:center}
+.x{white-space:nowrap}
+.mc-tf .x{flex-basis:100%;text-align:center}
+.mc-tf .d{min-width:0;justify-content:center;flex-wrap:wrap;gap:1px 3px;font-size:14px;padding:4px 4px;font-family:var(--f-num)}
+.mc-mid{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mc-mid .d{font-family:var(--f-num)}
+.mc-foot{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted)}
+.mc-foot b{color:var(--fg);font-family:var(--f-num);font-weight:600}
+.mc-foot .links{margin-left:auto;display:inline-flex;gap:12px}
+.mc-foot .links a{color:var(--muted)}
+.mc-foot b.up{color:var(--hot)} .mc-foot b.dn{color:var(--cold)}
+.mc .minis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;cursor:default}
+.mc .mini{padding:6px 7px 4px}
+.mc .mini .hd{font-size:11.5px}
+.mc .mini .hd b{font-size:12.5px}
+.mc .mini .lg{font-size:11px;gap:8px}
+@media (max-width:720px){
+  .wrap{padding-top:14px;gap:10px;padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+  h1{font-size:18px} .sub{font-size:12.5px}
+  .bar{padding:10px 12px;gap:10px}
+  .bar .btn:not(.ghost){flex:1}
+  .only-m{display:inline-block}
+  #optBtn{padding:9px 12px;font-size:14px}
+  .opts{display:none}
+  .bar.open .opts{display:flex;flex-direction:column;align-items:stretch;gap:12px;width:100%;padding-top:4px;border-top:1px solid var(--line)}
+  .bar.open .opts .chip{align-self:flex-start}
+  .status{font-size:13px;gap:4px 14px}
+  .views{padding:0 4px}
+  .view{padding:11px 11px 9px;font-size:14.5px}
+  .toolbar{padding:10px 12px 6px;flex-direction:column;align-items:stretch}
+  .tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{white-space:nowrap;flex:none}
+  .toolbar>*{min-width:0;max-width:100%}
+  .toolbar .grp{flex-wrap:nowrap}
+  .toolbar .grp select{flex:1 1 0;min-width:0;width:100%}
+  .mc .mini .hd .kv{display:none}
+  table{display:none}
+  .cards{display:block}
+  .tblbox{padding:0}
+  .legend{font-size:12px;padding:8px 12px 12px}
+  .log{max-height:280px}
+  .card h2{padding:10px 12px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bybit 스토캐스틱 <b>%D</b> 알림판</h1>
+    <span class="sub">USDT 무기한 선물 · Stoch(10, 6, 6) · 70/30 도달 & 임박 감시</span>
+  </header>
+
+  <section class="bar" aria-label="설정">
+    <button id="run" class="btn">▶ 감시 시작</button>
+    <button id="optBtn" class="btn ghost only-m" aria-expanded="false" aria-controls="opts">⚙ 설정 펼치기</button>
+    <div class="opts" id="opts">
+    <div class="grp"><span class="lbl">계산할 봉</span>
+      <label class="chip"><input type="checkbox" class="tf" value="60" checked>1시간</label>
+      <label class="chip"><input type="checkbox" class="tf" value="240" checked>4시간</label>
+      <label class="chip"><input type="checkbox" class="tf" value="D" checked>일봉</label>
+      <label class="chip"><input type="checkbox" class="tf" value="W" checked>주봉</label>
+    </div>
+    <div class="grp"><label class="lbl" for="near">임박 범위</label>
+      <input id="near" type="number" min="1" max="15" step="1" value="3">
+      <span class="note" id="nearTxt">→ 67~70 / 30~33</span>
+    </div>
+    <label class="chip" title="켜면 70 쪽은 D가 올라가는 중, 30 쪽은 내려가는 중인 종목만 '임박'으로 봄"><input type="checkbox" id="dir" checked>선 쪽으로 움직이는 것만</label>
+    <div class="grp"><label class="lbl" for="every">갱신 주기</label>
+      <select id="every"><option value="1">1분</option><option value="3">3분</option><option value="5" selected>5분</option><option value="10">10분</option><option value="15">15분</option></select>
+    </div>
+    <div class="grp"><label class="lbl" for="minvol">최소 24h 거래대금(백만$)</label>
+      <input id="minvol" type="number" min="0" step="1" value="0">
+    </div>
+    <div class="grp">
+      <label class="chip" title="끄면 마감된 봉까지만 계산(신호가 덜 흔들림)"><input type="checkbox" id="live" checked>진행 중인 봉 포함</label>
+      <label class="chip"><input type="checkbox" id="sound" checked>소리</label>
+      <label class="chip"><input type="checkbox" id="noti" checked>팝업 알림</label>
+      <label class="chip"><input type="checkbox" id="notiNear" checked>임박 진입도 알림</label>
+      <label class="chip" title="감시 중에 화면이 꺼지지 않게 함 (휴대폰용)"><input type="checkbox" id="wake" checked>화면 켜두기</label>
+    </div>
+    </div>
+  </section>
+
+  <div class="status" aria-live="polite">
+    <span>상태 <b id="st">대기</b></span>
+    <span>대상 <b id="cnt">–</b>종목</span>
+    <span>마지막 갱신 <b id="last">–</b></span>
+    <span>다음 갱신까지 <b id="next">–</b></span>
+    <div class="prog"><i id="bar"></i></div>
+  </div>
+
+  <div class="main">
+    <section class="card">
+      <div class="views" role="tablist" aria-label="봉 선택" id="views"></div>
+      <div class="toolbar">
+        <div class="tabs" role="group" aria-label="신호 필터" id="filters"></div>
+        <div class="grp"><label class="lbl" for="sortSel">정렬</label>
+          <select id="sortSel"></select>
+        </div>
+      </div>
+      <div class="tblbox">
+        <table>
+          <thead><tr id="thead"></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <div class="cards" id="cards"></div>
+        <div class="empty" id="empty">‘감시 시작’을 누르면 첫 계산(약 1분)이 끝난 뒤 여기에 종목이 표시됩니다.</div>
+      </div>
+      <div class="legend">
+        <span><span class="d nhot">68.4 <span class="ar">↗</span></span> 70 임박</span>
+        <span><span class="d ncold">31.6 <span class="ar">↘</span></span> 30 임박</span>
+        <span><span class="d hot">74.2</span> 70 이상</span>
+        <span><span class="d cold">25.8</span> 30 이하</span>
+        <span><span class="x hot">돌파</span> <span class="x cold">돌파</span> 이번 봉에서 막 넘음</span>
+        <span>도달 예상 = 남은 거리 ÷ 직전 봉 대비 D 변화량 (대략적인 참고값)</span>
+        <span>종목명 클릭 → TradingView 앱용 링크 복사 · 행 클릭 → 미니 차트</span>
+      </div>
+    </section>
+
+    <aside class="card">
+      <h2><span>알림 기록</span><button class="btn ghost" id="clr">지우기</button></h2>
+      <div class="log" id="log"><div class="note">새로 임박·돌파한 종목이 시간순으로 쌓입니다.</div></div>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+// ===== 설정값 =====
+let API = "https://api.bybit.com";
+const HOSTS = ["https://api.bybit.com","https://api.bytick.com"];  // 첫 주소가 막히면 Bybit 예비 주소로
+const K_LEN = 10, K_SMOOTH = 6, D_SMOOTH = 6;   // 스토캐스틱 10, 6, 6
+const HI = 70, LO = 30;
+const TFS = ["60","240","D","W"];
+const TF_NAME = {"60":"1H","240":"4H","D":"1D","W":"1W"};
+const TF_KO = {"60":"1시간봉","240":"4시간봉","D":"일봉","W":"주봉"};
+const CONCURRENCY = 8;
+const SERIES_LEN = 40;
+
+const $ = s => document.querySelector(s);
+let symbols = [], bases = {}, tickers = {}, results = {};  // results[sym][tf] = {d, pd, ks, ds}
+let mcap = {}, mcapAt = 0;
+let prevKeys = null, timer = null, tick = null, nextAt = 0, running = false, busy = false;
+let view = "all", filter = "near", sortKey = "eta", sortDir = 1, audio = null, newSet = new Set(), openSym = null;
+
+// ===== 설정 기억(이 브라우저에만 저장) =====
+function save(){ try{ localStorage.setItem("stochCfg2", JSON.stringify({
+  tf:[...document.querySelectorAll(".tf")].filter(c=>c.checked).map(c=>c.value),
+  every:$("#every").value, minvol:$("#minvol").value, near:$("#near").value, dir:$("#dir").checked, live:$("#live").checked,
+  sound:$("#sound").checked, noti:$("#noti").checked, notiNear:$("#notiNear").checked, view, filter, sortKey, sortDir })) }catch(e){} }
+function load(){ try{ const c = JSON.parse(localStorage.getItem("stochCfg2")||"null"); if(!c) return;
+  document.querySelectorAll(".tf").forEach(x=>x.checked = c.tf.includes(x.value));
+  $("#every").value=c.every; $("#minvol").value=c.minvol; $("#near").value=c.near; $("#dir").checked=c.dir;
+  $("#live").checked=c.live; $("#sound").checked=c.sound; $("#noti").checked=c.noti; $("#notiNear").checked=c.notiNear;
+  view=c.view||view; filter=c.filter||filter; sortKey=c.sortKey||sortKey; sortDir=c.sortDir||sortDir; }catch(e){} }
+load();
+const activeTfs = () => [...document.querySelectorAll(".tf")].filter(c=>c.checked).map(c=>c.value);
+const margin = () => Math.max(1, Math.min(15, +$("#near").value || 3));
+function updNearTxt(){ const m=margin(); $("#nearTxt").textContent = `→ ${HI-m}~${HI} / ${LO}~${LO+m}`; }
+updNearTxt();
+document.querySelectorAll(".bar input,.bar select").forEach(el=>el.addEventListener("change",()=>{ updNearTxt(); save(); render(); }));
+
+// ===== 데이터 받아오기 =====
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+async function getJSON(url, tries=3){
+  for(let i=0;i<tries;i++){
+    try{ const r = await fetch(url); const j = await r.json();
+      if(j.retCode===0) return j.result;
+      if(j.retCode===10006){ await sleep(1500); continue; }
+      throw new Error(j.retMsg);
+    }catch(e){ if(i===tries-1) throw e; await sleep(500); }
+  }
+}
+async function pickHost(){
+  const errs=[];
+  for(const h of HOSTS){
+    try{ const r = await fetch(h+"/v5/market/time"); const t = await r.text();
+      if(r.ok && t.includes('"retCode":0')){ API=h; return; }
+      errs.push(`${h.replace("https://","")} → 응답코드 ${r.status}`);
+    }catch(e){ errs.push(`${h.replace("https://","")} → ${e.message}`); }
+  }
+  throw new Error(errs.join(" / "));
+}
+async function loadSymbols(){
+  await pickHost();
+  let list=[], cursor="";
+  do{ const r = await getJSON(`${API}/v5/market/instruments-info?category=linear&limit=1000${cursor?`&cursor=${encodeURIComponent(cursor)}`:""}`);
+      list = list.concat(r.list); cursor = r.nextPageCursor; }while(cursor);
+  const perp = list.filter(s=>s.status==="Trading" && s.quoteCoin==="USDT" && s.contractType==="LinearPerpetual");
+  symbols = perp.map(s=>s.symbol);
+  bases = {}; perp.forEach(s=>bases[s.symbol]=s.baseCoin);
+  const t = await getJSON(`${API}/v5/market/tickers?category=linear`);
+  tickers = {}; t.list.forEach(x=>tickers[x.symbol]={turn:+x.turnover24h, chg:+x.price24hPcnt*100});
+}
+async function loadMcap(){
+  if(Date.now()-mcapAt < 3600e3 && Object.keys(mcap).length) return;
+  try{ const c = JSON.parse(localStorage.getItem("mcapCache")||"null");
+    if(c && Date.now()-c.at < 3600e3){ mcap=c.map; mcapAt=c.at; return; } }catch(e){}
+  const map={};
+  for(let p=1;p<=4;p++){
+    try{ const r = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${p}`);
+      if(!r.ok) break;
+      (await r.json()).forEach(c=>{ const k=c.symbol.toUpperCase(); if(c.market_cap_rank && !(k in map)) map[k]=c.market_cap_rank; });
+    }catch(e){ break; }
+    await sleep(1200);
+  }
+  if(Object.keys(map).length){ mcap=map; mcapAt=Date.now();
+    try{ localStorage.setItem("mcapCache", JSON.stringify({at:mcapAt,map})); }catch(e){} }
+}
+function coinOf(sym){ return (bases[sym]||sym.replace(/USDT$/,"")).replace(/^(10+|1M)(?=[A-Z])/,""); }
+function rankOf(sym){ return mcap[coinOf(sym)] || null; }
+
+// ===== 스토캐스틱 계산 (TradingView 'Stoch'와 같은 방식) =====
+function stoch(h,l,c){
+  const n=c.length, raw=new Array(n).fill(NaN);
+  for(let i=K_LEN-1;i<n;i++){
+    let hh=-Infinity, ll=Infinity;
+    for(let j=i-K_LEN+1;j<=i;j++){ if(h[j]>hh)hh=h[j]; if(l[j]<ll)ll=l[j]; }
+    raw[i] = hh===ll ? NaN : (c[i]-ll)/(hh-ll)*100;
+  }
+  const k = sma(raw,K_SMOOTH); return {k, d: sma(k,D_SMOOTH)};
+}
+function sma(a,len){ const o=new Array(a.length).fill(NaN);
+  for(let i=len-1;i<a.length;i++){ let s=0,ok=true; for(let j=i-len+1;j<=i;j++){ if(isNaN(a[j])){ok=false;break} s+=a[j]; } if(ok)o[i]=s/len; } return o; }
+
+async function calc(sym, tf){
+  const r = await getJSON(`${API}/v5/market/kline?category=linear&symbol=${sym}&interval=${tf}&limit=80`);
+  let rows = r.list.slice().reverse();
+  if(!$("#live").checked) rows = rows.slice(0,-1);
+  if(rows.length < K_LEN+K_SMOOTH+D_SMOOTH) return null;
+  const {k,d:dArr} = stoch(rows.map(x=>+x[2]), rows.map(x=>+x[3]), rows.map(x=>+x[4]));
+  const n=dArr.length, d=dArr[n-1], pd=dArr[n-2];
+  if(isNaN(d)||isNaN(pd)) return null;
+  const round = a => a.slice(-SERIES_LEN).map(v=>isNaN(v)?null:Math.round(v*10)/10);
+  return {d, pd, ks:round(k), ds:round(dArr)};
+}
+
+// ===== 신호 판정 =====
+// cross: 이번 봉에서 70/30을 막 넘음 · zone: 70 이상/30 이하 · near: 67~70(상승 중)/30~33(하락 중)
+function classify(v){
+  if(!v) return null;
+  const m=margin(), dirOnly=$("#dir").checked, slope=v.d-v.pd;
+  const o={d:v.d, pd:v.pd, slope, zone:null, cross:null, near:null, eta:null};
+  if(v.d>=HI) o.zone="hot"; else if(v.d<=LO) o.zone="cold";
+  if(v.pd<HI && v.d>=HI) o.cross="hot"; else if(v.pd>LO && v.d<=LO) o.cross="cold";
+  if(v.d<HI && v.d>=HI-m && (!dirOnly || slope>0)) o.near="hot";
+  else if(v.d>LO && v.d<=LO+m && (!dirOnly || slope<0)) o.near="cold";
+  if(o.near==="hot" && slope>0) o.eta=(HI-v.d)/slope;      // 지금 속도면 몇 봉 뒤 70에 닿는지
+  if(o.near==="cold" && slope<0) o.eta=(v.d-LO)/(-slope);
+  return o;
+}
+const FILTERS = [
+  ["near","임박 전체", c=>c.near],
+  ["nhot","70 임박", c=>c.near==="hot"],
+  ["ncold","30 임박", c=>c.near==="cold"],
+  ["cross","방금 돌파", c=>c.cross],
+  ["hot","70 이상", c=>c.zone==="hot"],
+  ["cold","30 이하", c=>c.zone==="cold"],
+  ["any","모든 신호", c=>c.near||c.zone],
+];
+const fTest = k => (FILTERS.find(f=>f[0]===k)||FILTERS[0])[2];
+
+// ===== 한 바퀴 검사 =====
+async function scan(){
+  if(busy) return; busy=true; $("#st").textContent="계산 중";
+  try{
+    await loadSymbols();
+    loadMcap().then(render);
+    const minTurn = (+$("#minvol").value||0)*1e6;
+    const tfs = activeTfs();
+    const targets = symbols.filter(s=>(tickers[s]?.turn||0) >= minTurn);
+    $("#cnt").textContent = targets.length;
+    const jobs = []; targets.forEach(s=>tfs.forEach(tf=>jobs.push([s,tf])));
+    const fresh = {}; let done=0, idx=0;
+    async function worker(){ while(idx<jobs.length){ const [s,tf]=jobs[idx++];
+        try{ const v = await calc(s,tf); if(v){ (fresh[s] ||= {})[tf]=v; } }catch(e){}
+        done++; if(done%20===0||done===jobs.length) $("#bar").style.width=(done/jobs.length*100)+"%"; } }
+    await Promise.all(Array.from({length:CONCURRENCY},worker));
+    results = fresh;
+    detectNew(tfs);
+    $("#last").textContent = new Date().toTimeString().slice(0,8);
+    $("#st").textContent = running ? "감시 중" : "정지";
+    render();
+  }catch(e){
+    $("#st").textContent = "Bybit 접속 실패: " + e.message + "  [열린 위치: " + (location.protocol==="file:"?"내 PC 파일":location.host||location.protocol) + "]";
+  }finally{ busy=false; setTimeout(()=>$("#bar").style.width="0",800); }
+}
+
+// ===== 새로 임박·돌파한 종목 찾기 → 알림 =====
+function detectNew(tfs){
+  const now = new Map(), withNear=$("#notiNear").checked;
+  for(const s in results) for(const tf of tfs){ const c=classify(results[s][tf]); if(!c) continue;
+    if(c.cross) now.set(`${s}|${tf}|x${c.cross}`, {s,tf,c,kind:"x"+c.cross});
+    if(withNear && c.near) now.set(`${s}|${tf}|n${c.near}`, {s,tf,c,kind:"n"+c.near}); }
+  newSet = new Set();
+  if(prevKeys){                                       // 첫 계산은 기준만 잡고 소리·팝업 없음
+    const fresh = [...now.keys()].filter(k=>!prevKeys.has(k)).map(k=>now.get(k));
+    fresh.forEach(x=>{ newSet.add(x.s); addLog(x); });
+    if(fresh.length) notify(fresh);
+  }else{ [...now.values()].filter(x=>x.kind[0]==="x").forEach(addLog); }
+  prevKeys = new Set(now.keys());
+}
+const KIND_TXT = {xhot:"70 돌파", xcold:"30 돌파", nhot:"70 임박", ncold:"30 임박"};
+function addLog({s,tf,c,kind}){
+  const el=document.createElement("div");
+  const t=new Date().toTimeString().slice(0,5);
+  el.innerHTML = `<time>${t}</time><span><b>${s.replace(/USDT$/,"")}</b> ${TF_NAME[tf]} · D ${c.d.toFixed(1)} <span class="badge b-${kind}">${KIND_TXT[kind]}</span></span>`;
+  const log=$("#log"); if(log.firstElementChild?.classList.contains("note")) log.innerHTML="";
+  log.prepend(el); while(log.children.length>300) log.lastChild.remove();
+}
+function notify(list){
+  if($("#sound").checked && audio){ const cross=list.some(x=>x.kind[0]==="x");
+    (cross?[880,1175]:[660]).forEach((f,i)=>{ const o=audio.createOscillator(), g=audio.createGain();
+    o.frequency.value=f; o.connect(g); g.connect(audio.destination); const t=audio.currentTime+i*.18;
+    g.gain.setValueAtTime(.15,t); g.gain.exponentialRampToValueAtTime(.001,t+.16); o.start(t); o.stop(t+.17); }); }
+  if($("#noti").checked && "Notification" in window && Notification.permission==="granted"){
+    try{ new Notification(`스토캐스틱 신호 ${list.length}건`,{body:list.slice(0,6).map(x=>`${x.s} ${TF_NAME[x.tf]} D ${x.c.d.toFixed(1)} ${KIND_TXT[x.kind]}`).join("\n")}); }catch(e){}
+  }
+  if($("#noti").checked){ try{ navigator.vibrate?.(list.some(x=>x.kind[0]==="x")?[180,90,180]:[120]); }catch(e){} }
+  toast(`<b>새 신호 ${list.length}건</b> · ` + list.slice(0,4).map(x=>`${x.s.replace(/USDT$/,"")} ${TF_NAME[x.tf]} ${KIND_TXT[x.kind]}`).join(", ") + (list.length>4?" …":""));
+  document.title = `(${list.length}) 새 신호 · Bybit 스토캐스틱`;
+}
+
+// ===== 차트 그리기 (SVG) =====
+function miniChart(v){
+  const W=260,H=96,P=4, n=v.ds.length, x=i=>P+(W-2*P)*i/(n-1), y=val=>P+(H-2*P)*(1-val/100);
+  const path=a=>a.map((val,i)=>val==null?null:`${x(i).toFixed(1)},${y(val).toFixed(1)}`).filter(Boolean).join(" ");
+  const last=v.ds[n-1], col=last>=HI?"var(--hot)":last<=LO?"var(--cold)":"var(--accent)", m=margin();
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="스토캐스틱 K, D 선">
+    <rect x="${P}" y="${y(100)}" width="${W-2*P}" height="${y(HI)-y(100)}" fill="var(--hot-bg)"/>
+    <rect x="${P}" y="${y(LO)}" width="${W-2*P}" height="${y(0)-y(LO)}" fill="var(--cold-bg)"/>
+    <line x1="${P}" x2="${W-P}" y1="${y(HI)}" y2="${y(HI)}" stroke="var(--hot)" stroke-dasharray="3 3" stroke-width="1"/>
+    <line x1="${P}" x2="${W-P}" y1="${y(LO)}" y2="${y(LO)}" stroke="var(--cold)" stroke-dasharray="3 3" stroke-width="1"/>
+    <line x1="${P}" x2="${W-P}" y1="${y(HI-m)}" y2="${y(HI-m)}" stroke="var(--hot)" stroke-opacity=".35" stroke-width="1"/>
+    <line x1="${P}" x2="${W-P}" y1="${y(LO+m)}" y2="${y(LO+m)}" stroke="var(--cold)" stroke-opacity=".35" stroke-width="1"/>
+    <polyline points="${path(v.ks)}" fill="none" stroke="var(--kline)" stroke-width="1.3"/>
+    <polyline points="${path(v.ds)}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linejoin="round"/>
+    <circle cx="${x(n-1)}" cy="${y(last)}" r="3.5" fill="${col}"/>
+  </svg>`;
+}
+function spark(v){   // 표 안의 작은 D 추이(최근 20봉)
+  const ds=v.ds.slice(-20), W=96,H=30, n=ds.length, x=i=>1+(W-2)*i/(n-1), y=val=>1+(H-2)*(1-val/100);
+  const pts=ds.map((val,i)=>val==null?null:`${x(i).toFixed(1)},${y(val).toFixed(1)}`).filter(Boolean).join(" ");
+  const last=ds[n-1], col=last>=HI-margin()?"var(--hot)":last<=LO+margin()?"var(--cold)":"var(--muted)";
+  return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">
+    <line x1="0" x2="${W}" y1="${y(HI)}" y2="${y(HI)}" stroke="var(--hot)" stroke-dasharray="2 2" stroke-opacity=".7"/>
+    <line x1="0" x2="${W}" y1="${y(LO)}" y2="${y(LO)}" stroke="var(--cold)" stroke-dasharray="2 2" stroke-opacity=".7"/>
+    <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.8"/>
+    <circle cx="${x(n-1)}" cy="${y(last)}" r="2.5" fill="${col}"/></svg>`;
+}
+function miniGrid(s){
+  return `<div class="minis">${activeTfs().map(tf=>{ const v=results[s]?.[tf];
+    if(!v) return `<div class="mini"><div class="hd"><b>${TF_KO[tf]}</b><span>데이터 부족</span></div></div>`;
+    return `<div class="mini"><div class="hd"><b>${TF_KO[tf]}</b><span><em class="kv" style="font-style:normal">K ${v.ks.at(-1)?.toFixed(1)} · </em>D ${v.d.toFixed(1)}</span></div>${miniChart(v)}
+      <div class="lg"><span><i style="background:var(--kline)"></i>%K</span><span><i style="background:var(--accent)"></i>%D</span><span>최근 ${v.ds.length}봉</span></div></div>`; }).join("")}</div>`;
+}
+const detailRow = (s, colspan) => `<tr class="detail"><td colspan="${colspan}">${miniGrid(s)}</td></tr>`;
+
+// ===== 휴대폰용 카드 =====
+const MQ = matchMedia("(max-width:720px)");
+function cardHtml(x, tfs){
+  const open=openSym===x.s, base=x.s.replace(/USDT$/,"");
+  const top=`<div class="mc-top"><span class="caret muted">${open?"▼":"▶"}</span><button class="nm" data-tv="${x.s}">${base}</button><span class="rank">${x.rank?"#"+x.rank:""}</span><span class="sp"></span><span class="chg ${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</span></div>`;
+  const links=`<span class="links"><a href="${tvUrl(x.s)}" target="_blank" rel="noopener">웹</a><a href="https://www.bybit.com/trade/usdt/${x.s}" target="_blank" rel="noopener">Bybit</a></span>`;
+  let mid, foot;
+  if(view==="all"){
+    mid=`<div class="mc-tfs">${tfs.map(tf=>`<div class="mc-tf"><span class="lbl">${TF_NAME[tf]}</span>${dCell(x.cs[tf])}</div>`).join("")}</div>`;
+    foot=`<div class="mc-foot"><span>도달 예상 <b>${x.eta!=null&&x.eta<0?"돌파함":fmtEta(x.eta)}</b></span><span>거래대금 <b>${fmtTurn(x.turn)}</b></span>${links}</div>`;
+  }else{
+    const c=x.cs[view], v=results[x.s][view];
+    mid=`<div class="mc-mid">${badge(c)}${spark(v)}${dCell(c)}</div>`;
+    foot=`<div class="mc-foot"><span>직전 <b>${c.pd.toFixed(1)}</b></span><span>변화 <b class="${c.slope>=0?"up":"dn"}">${c.slope>=0?"+":""}${c.slope.toFixed(1)}</b></span><span>도달 <b>${c.cross?"돌파함":fmtEta(c.eta)}</b></span><span>거래대금 <b>${fmtTurn(x.turn)}</b></span>${links}</div>`;
+  }
+  return `<div class="mc${open?" open":""}${newSet.has(x.s)?" new":""}" data-s="${x.s}" tabindex="0" role="button" aria-expanded="${open}">${top}${mid}${foot}${open?miniGrid(x.s):""}</div>`;
+}
+MQ.addEventListener?.("change", ()=>render());
+function dCell(c){
+  if(!c) return `<span class="d mid">–</span>`;
+  const cls = c.zone || (c.near ? "n"+c.near : "mid");
+  const ar = c.near && !c.zone ? ` <span class="ar">${c.slope>0?"↗":"↘"}</span>` : "";
+  return `<span class="d ${cls}">${c.cross?`<span class="x ${c.cross}">돌파</span>`:""}${c.d.toFixed(1)}${ar}</span>`;
+}
+function badge(c){
+  if(c.cross) return `<span class="badge b-x${c.cross}">${c.cross==="hot"?"70 돌파":"30 돌파"}</span>`;
+  if(c.near)  return `<span class="badge b-n${c.near}">${c.near==="hot"?"70 임박 ↗":"30 임박 ↘"}</span>`;
+  if(c.zone)  return `<span class="badge b-${c.zone}">${c.zone==="hot"?"70 이상":"30 이하"}</span>`;
+  return `<span class="muted">–</span>`;
+}
+const fmtEta = e => e==null ? "–" : e<1 ? "1봉 이내" : `약 ${e.toFixed(1)}봉`;
+const fmtTurn = v => v>=1e9?"$"+(v/1e9).toFixed(2)+"B":v>=1e6?"$"+(v/1e6).toFixed(1)+"M":"$"+(v/1e3).toFixed(0)+"K";
+const tvUrl = s => `https://www.tradingview.com/chart/?symbol=BYBIT%3A${s}.P`;
+function symCell(s, open){
+  return `<td class="sym"><span class="caret">${open?"▼":"▶"}</span><button class="nm" data-tv="${s}" title="TradingView 앱에서 열 링크 복사">${s.replace(/USDT$/,"")}</button><span class="links"><a href="${tvUrl(s)}" target="_blank" rel="noopener">웹</a><a href="https://www.bybit.com/trade/usdt/${s}" target="_blank" rel="noopener">Bybit</a></span></td>`;
+}
+
+// ===== 정렬 옵션 =====
+const SORTS = {
+  eta:  ["도달 임박 순", 1],
+  hits: ["신호 많은 순", -1],
+  ext:  ["D 극단 순", -1],
+  turn: ["거래대금 큰 순", -1],
+  rank: ["시가총액 순위 순", 1],
+  chg:  ["24h 상승률 순", -1],
+  sym:  ["이름 순", 1],
+};
+
+// ===== 화면 그리기 =====
+function render(){
+  const tfs = activeTfs();
+  if(view!=="all" && !tfs.includes(view)) view="all";
+  const viewTfs = view==="all" ? tfs : [view];
+  const test = fTest(filter);
+
+  // 봉 탭 (탭 옆 숫자 = 그 봉에서 현재 필터에 걸린 종목 수)
+  const countTf = tf => Object.keys(results).filter(s=>{ const c=classify(results[s][tf]); return c && test(c); }).length;
+  const countAll = Object.keys(results).filter(s=>tfs.some(tf=>{ const c=classify(results[s][tf]); return c && test(c); })).length;
+  $("#views").innerHTML = [["all","종합"],...tfs.map(tf=>[tf,TF_KO[tf]])].map(([k,n])=>
+    `<button class="view" role="tab" data-v="${k}" aria-selected="${view===k}">${n}<span class="n">${k==="all"?countAll:countTf(k)}</span></button>`).join("");
+
+  // 필터 버튼 (숫자 = 지금 보고 있는 탭 기준)
+  $("#filters").innerHTML = FILTERS.map(([k,n,fn],i)=>{
+    const cnt = Object.keys(results).filter(s=>viewTfs.some(tf=>{ const c=classify(results[s][tf]); return c && fn(c); })).length;
+    return `<button class="tab${i===3?" sep":""}" data-f="${k}" aria-pressed="${filter===k}">${n}<span class="n">${cnt}</span></button>`; }).join("");
+
+  // 행 만들기
+  const rows=[];
+  for(const s in results){
+    const cs = {}; let hits=0, minEta=Infinity, maxExt=-1, any=false;
+    viewTfs.forEach(tf=>{ const c=classify(results[s][tf]); cs[tf]=c; if(!c) return;
+      if(test(c)) any=true;
+      if(c.near||c.zone) hits++;
+      if(c.eta!=null) minEta=Math.min(minEta,c.eta);
+      if(c.cross) minEta=Math.min(minEta,-1);           // 이미 돌파한 건 '임박 순'에서 맨 위
+      maxExt=Math.max(maxExt,Math.abs(c.d-50)); });
+    if(!any) continue;
+    rows.push({s,cs,hits,eta:minEta===Infinity?null:minEta,ext:maxExt,turn:tickers[s]?.turn||0,chg:tickers[s]?.chg||0,rank:rankOf(s)});
+  }
+  const val = (x,k)=> k==="sym"?x.s : k==="hits"?x.hits : k==="ext"?x.ext : k==="turn"?x.turn : k==="chg"?x.chg
+                    : k==="rank"?(x.rank??1e9) : k==="eta"?(x.eta??1e9)
+                    : k==="d"?(x.cs[view]?.d??-1) : k==="slope"?(x.cs[view]?.slope??0) : TFS.includes(k)?tfSortVal(x,k) : 0;
+  rows.sort((a,b)=>{ const A=val(a,sortKey),B=val(b,sortKey); return (A>B?1:A<B?-1:0)*sortDir || b.turn-a.turn; });
+
+  $("#sortSel").innerHTML = Object.entries(SORTS).map(([k,[n]])=>`<option value="${k}"${k===sortKey?" selected":""}>${n}</option>`).join("")
+    + (SORTS[sortKey]?"":`<option value="${sortKey}" selected>표 제목 기준</option>`);
+
+  if(MQ.matches){
+    $("#cards").innerHTML = rows.map(x=>cardHtml(x,tfs)).join("");
+    $("#tbody").innerHTML = ""; $("#thead").innerHTML = "";
+    $("#empty").hidden = rows.length>0;
+    if(Object.keys(results).length && !rows.length) $("#empty").textContent="지금은 이 조건에 맞는 종목이 없어요.";
+    return;
+  }
+  $("#cards").innerHTML = "";
+  let heads, body;
+  if(view==="all"){
+    heads=[["sym","종목"],["rank","시총 순위"],["hits","해당 봉"],...tfs.map(tf=>[tf,TF_NAME[tf]+" D"]),["eta","도달 예상"],["chg","24h 등락"],["turn","24h 거래대금"]];
+    body = rows.map(x=>{ const open=openSym===x.s;
+      return `<tr class="row${open?" open":""}${newSet.has(x.s)?" new":""}" data-s="${x.s}" tabindex="0" aria-expanded="${open}">
+        ${symCell(x.s,open)}<td class="rank">${x.rank?"#"+x.rank:"–"}</td><td>${x.hits}/${tfs.length}</td>
+        ${tfs.map(tf=>`<td>${dCell(x.cs[tf])}</td>`).join("")}
+        <td>${x.eta!=null&&x.eta<0?"돌파함":fmtEta(x.eta)}</td>
+        <td class="${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</td><td>${fmtTurn(x.turn)}</td></tr>`
+        + (open?detailRow(x.s,heads.length):""); }).join("");
+  }else{
+    heads=[["sym","종목"],["rank","시총 순위"],["state","상태"],["spark","D 추이(20봉)"],["d","%D"],["pd","직전 D"],["slope","변화"],["eta","도달 예상"],["k","%K"],["chg","24h 등락"],["turn","24h 거래대금"]];
+    body = rows.map(x=>{ const open=openSym===x.s, c=x.cs[view], v=results[x.s][view];
+      return `<tr class="row${open?" open":""}${newSet.has(x.s)?" new":""}" data-s="${x.s}" tabindex="0" aria-expanded="${open}">
+        ${symCell(x.s,open)}<td class="rank">${x.rank?"#"+x.rank:"–"}</td>
+        <td class="l">${badge(c)}</td><td>${spark(v)}</td>
+        <td>${dCell(c)}</td><td class="muted">${c.pd.toFixed(1)}</td>
+        <td class="${c.slope>=0?"up":"dn"}">${c.slope>=0?"+":""}${c.slope.toFixed(1)}</td>
+        <td>${c.cross?"돌파함":fmtEta(c.eta)}</td>
+        <td class="muted">${v.ks.at(-1)?.toFixed(1)??"–"}</td>
+        <td class="${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</td><td>${fmtTurn(x.turn)}</td></tr>`
+        + (open?detailRow(x.s,heads.length):""); }).join("");
+  }
+  const sortable = new Set(["sym","rank","hits","eta","chg","turn","d","slope",...tfs]);
+  $("#thead").innerHTML = heads.map(([k,n])=>`<th data-k="${sortable.has(k)?k:""}" scope="col" class="${sortKey===k?"on":""} ${["state"].includes(k)?"l":""}">${n}${sortKey===k?(sortDir<0?" ▾":" ▴"):""}</th>`).join("");
+  $("#tbody").innerHTML = body;
+  $("#empty").hidden = rows.length>0;
+  if(Object.keys(results).length && !rows.length) $("#empty").textContent="지금은 이 조건에 맞는 종목이 없어요.";
+}
+// 종합 탭에서 봉 열(1H D 등)을 눌러 정렬할 때: 그 봉의 D가 극단적인 순
+const tfSortVal = (x,tf) => x.cs[tf] ? Math.abs(x.cs[tf].d-50) : -1;
+
+// ===== TradingView 앱으로 보내기: 링크 복사 → 앱 메뉴 '클립보드에서 링크 열기' =====
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); return true; }catch(e){
+    const ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta); ta.select();
+    let ok=false; try{ ok=document.execCommand("copy"); }catch(_){} ta.remove(); return ok; }
+}
+let toastT=null;
+function toast(html){ const t=$("#toast"); t.innerHTML=html; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,4500); }
+
+// ===== 클릭 처리 =====
+$("#views").addEventListener("click",e=>{ const b=e.target.closest(".view"); if(!b)return; view=b.dataset.v;
+  if(view==="all" && ["d","slope"].includes(sortKey)){ sortKey="eta"; sortDir=1; }
+  if(view!=="all" && TFS.includes(sortKey)){ sortKey="d"; sortDir=-1; }
+  save(); render(); });
+$("#filters").addEventListener("click",e=>{ const b=e.target.closest(".tab"); if(!b)return; filter=b.dataset.f; save(); render(); });
+$(".tblbox").addEventListener("click", async e=>{
+  if(e.target.closest("a") || e.target.closest(".minis")) return;
+  const nm=e.target.closest(".nm");
+  if(nm){ const s=nm.dataset.tv, ok=await copyText(tvUrl(s));
+    toast(ok ? `<b>${s}</b> 차트 링크를 복사했어요. TradingView 앱 메뉴 → <b>클립보드에서 링크 열기</b>를 누르면 이 종목이 열립니다.`
+             : `복사에 실패했어요. ‘웹’ 링크를 이용해 주세요.`);
+    return; }
+  const tr=e.target.closest("tr.row, .mc"); if(!tr) return;
+  openSym = openSym===tr.dataset.s ? null : tr.dataset.s; render();
+});
+$(".tblbox").addEventListener("keydown",e=>{ if((e.key==="Enter"||e.key===" ") && e.target.matches("tr.row, .mc")){ e.preventDefault(); openSym = openSym===e.target.dataset.s?null:e.target.dataset.s; render(); }});
+$("#thead").addEventListener("click",e=>{ const k=e.target.closest("th")?.dataset.k; if(!k)return;
+  if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir = (k==="sym"||k==="rank"||k==="eta")?1:-1; } save(); render(); });
+$("#sortSel").addEventListener("change",e=>{ sortKey=e.target.value; sortDir = SORTS[sortKey]?.[1] ?? -1; save(); render(); });
+$("#optBtn").addEventListener("click",()=>{ const open=$(".bar").classList.toggle("open");
+  $("#optBtn").setAttribute("aria-expanded",open); $("#optBtn").textContent = open?"⚙ 설정 접기":"⚙ 설정 펼치기"; });
+
+// 화면 켜두기 (휴대폰에서 감시 중 화면이 꺼지면 계산이 멈추기 때문)
+let wakeLock=null;
+async function wake(on){
+  try{
+    if(on && $("#wake").checked && "wakeLock" in navigator && document.visibilityState==="visible"){ wakeLock = await navigator.wakeLock.request("screen"); }
+    else if(!on && wakeLock){ await wakeLock.release(); wakeLock=null; }
+  }catch(e){}
+}
+$("#wake").addEventListener("change",()=>wake(running && $("#wake").checked));
+$("#clr").addEventListener("click",()=>{ $("#log").innerHTML='<div class="note">기록을 지웠어요.</div>'; });
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ document.title="Bybit 스토캐스틱 알림판"; if(running) wake(true); } });
+
+// ===== 시작 / 정지 =====
+$("#run").addEventListener("click", async ()=>{
+  if(running){ running=false; clearInterval(timer); clearInterval(tick); wake(false);
+    $("#run").textContent="▶ 감시 시작"; $("#run").classList.remove("stop"); $("#st").textContent="정지"; $("#next").textContent="–"; return; }
+  running=true; $("#run").textContent="■ 정지"; $("#run").classList.add("stop");
+  try{ audio = audio || new (window.AudioContext||window.webkitAudioContext)(); audio.resume?.(); }catch(e){}
+  wake(true);
+  if($("#noti").checked && "Notification" in window && Notification.permission==="default"){ try{ Notification.requestPermission(); }catch(e){} }
+  const loop = async ()=>{ await scan(); nextAt = Date.now() + (+$("#every").value)*60000; };
+  await loop();
+  timer = setInterval(()=>{ if(running && Date.now()>=nextAt && !busy) loop(); }, 1000);
+  tick = setInterval(()=>{ if(!running)return; const s=Math.max(0,Math.round((nextAt-Date.now())/1000));
+    $("#next").textContent = busy?"계산 중": `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`; },1000);
+});
+render();
+</script>
+</body>
+</html>
