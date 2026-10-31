@@ -59,7 +59,18 @@ button:focus-visible,select:focus-visible,input:focus-visible,.chip:focus-within
 .tab{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:5px 12px;cursor:pointer;font-size:14px}
 .tab[aria-pressed=true]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .tab .n{font-family:var(--f-num);margin-left:5px;opacity:.8;font-size:13px}
-.tab.sep{margin-left:8px}
+.fl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;min-width:0}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;padding:3px;background:var(--bg);gap:2px}
+.seg button{border:0;background:none;border-radius:7px;padding:6px 14px;font-size:14.5px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+.seg button[aria-selected=true]{background:var(--accent);color:var(--accent-fg)}
+.seg button .n{font-family:var(--f-num);font-size:12px;font-weight:600;margin-left:5px;opacity:.85}
+.d.tlo{border:1.5px solid var(--cold);color:var(--cold);font-weight:700}
+.d.thi{border:1.5px solid var(--hot);color:var(--hot);font-weight:700}
+.trk{display:inline-flex;flex-direction:column;align-items:center;gap:2px}
+.trk small{font-family:var(--f-ui);font-size:11.5px;color:var(--muted);white-space:nowrap}
+.badge.b-tlo{border:1.5px solid var(--cold);color:var(--cold)}
+.badge.b-thi{border:1.5px solid var(--hot);color:var(--hot)}
+.badge.b-rlo,.badge.b-rhi{border:1.5px solid var(--line);color:var(--muted)}
 .tblbox{overflow-x:auto;padding:6px 0 4px}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
 th,td{padding:10px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
@@ -182,6 +193,8 @@ tr.detail td{padding:6px 12px 16px;background:var(--sel);text-align:left;white-s
   .tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
   .tabs::-webkit-scrollbar{display:none}
   .tab{white-space:nowrap;flex:none}
+  .fl{flex-direction:column;align-items:stretch;gap:8px}
+  .seg{display:flex} .seg button{flex:1;padding:8px 6px;font-size:14px}
   .toolbar>*{min-width:0;max-width:100%}
   .toolbar .grp{flex-wrap:nowrap}
   .toolbar .grp select{flex:1 1 0;min-width:0;width:100%}
@@ -275,7 +288,7 @@ tr.detail td{padding:6px 12px 16px;background:var(--sel);text-align:left;white-s
     <section class="card">
       <div class="views" role="tablist" aria-label="봉 선택" id="views"></div>
       <div class="toolbar">
-        <div class="tabs" role="group" aria-label="신호 필터" id="filters"></div>
+        <div class="fl"><div class="seg" role="tablist" aria-label="신호 종류" id="groups"></div><div class="tabs" role="group" aria-label="세부 필터" id="filters"></div></div>
         <div class="grp"><label class="lbl" for="sortSel">정렬</label>
           <select id="sortSel"></select>
         </div>
@@ -291,11 +304,11 @@ tr.detail td{padding:6px 12px 16px;background:var(--sel);text-align:left;white-s
       <div class="legend">
         <span><span class="d nhot">68.4 <span class="ar">↗</span></span> 70 임박</span>
         <span><span class="d ncold">31.6 <span class="ar">↘</span></span> 30 임박</span>
-        <span><span class="d hot">74.2</span> 70 이상</span>
-        <span><span class="d cold">25.8</span> 30 이하</span>
+        <span><span class="d tlo">41.2</span> 관리 중 (30 출발)</span>
+        <span><span class="d thi">58.7</span> 관리 중 (70 출발)</span>
         <span><span class="x hot">돌파</span> <span class="x cold">돌파</span> 이번 봉에서 막 넘음</span>
-        <span>도달 예상 = 남은 거리 ÷ 직전 봉 대비 D 변화량 (대략적인 참고값)</span>
-        <span>종목명 클릭 → TradingView 앱용 링크 복사 · 행 클릭 → 미니 차트</span>
+        <span><b>관리 중</b> = %D가 30/70 안으로 들어간 뒤 힘이 해소될 때까지. 골크(데크) 1번이면 %D, 2번 이상이면 %K가 반대편 70(30)에 닿으면 종료</span>
+        <span>도달 예상 = 남은 거리 ÷ 직전 봉 대비 D 변화량 (참고값) · 종목명 클릭 → TradingView 링크 복사 · 행 클릭 → 미니 차트</span>
       </div>
     </section>
 
@@ -334,7 +347,7 @@ function load(){ try{ const c = JSON.parse(localStorage.getItem("stochCfg2")||"n
   document.querySelectorAll(".tf").forEach(x=>x.checked = c.tf.includes(x.value));
   $("#every").value=c.every; $("#minvol").value=c.minvol; $("#near").value=c.near; $("#dir").checked=c.dir;
   $("#live").checked=c.live; $("#sound").checked=c.sound; $("#noti").checked=c.noti; $("#notiNear").checked=c.notiNear;
-  view=c.view||view; filter=c.filter||filter; sortKey=c.sortKey||sortKey; sortDir=c.sortDir||sortDir; }catch(e){} }
+  view=c.view||view; filter=c.filter||filter; if(!ALLF.some(f=>f[0]===filter)) filter="near"; sortKey=c.sortKey||sortKey; sortDir=c.sortDir||sortDir; }catch(e){} }
 load();
 const activeTfs = () => [...document.querySelectorAll(".tf")].filter(c=>c.checked).map(c=>c.value);
 const margin = () => Math.max(1, Math.min(15, +$("#near").value || 3));
@@ -411,7 +424,7 @@ function sma(a,len){ const o=new Array(a.length).fill(NaN);
   for(let i=len-1;i<a.length;i++){ let s=0,ok=true; for(let j=i-len+1;j<=i;j++){ if(isNaN(a[j])){ok=false;break} s+=a[j]; } if(ok)o[i]=s/len; } return o; }
 
 async function calc(sym, tf){
-  const r = await getJSON(`${API}/v5/market/kline?category=linear&symbol=${sym}&interval=${tf}&limit=100`);
+  const r = await getJSON(`${API}/v5/market/kline?category=linear&symbol=${sym}&interval=${tf}&limit=200`);
   let rows = r.list.slice().reverse();
   if(!$("#live").checked) rows = rows.slice(0,-1);
   if(rows.length < K_LEN+K_SMOOTH+D_SMOOTH) return null;
@@ -423,7 +436,36 @@ async function calc(sym, tf){
   const ex = {};
   EXTRA.forEach(e=>{ const r2=stoch(H,L,C,e.k,e.ks,e.ds), dd=r2.d[n-1], pp=r2.d[n-2];
     ex[e.key] = isNaN(dd) ? null : {d:dd, pd:pp, ks:round(r2.k), ds:round(r2.d)}; });
-  return {d, pd, ks:round(k), ds:round(dArr), ex};
+  return {d, pd, ks:round(k), ds:round(dArr), ex, tr:track(k,dArr)};
+}
+
+// ===== 관리(트래킹) 상태 계산 =====
+// %D가 30 아래로 들어가면 '30 출발' 관리 시작 → 골크 1번 이하면 %D가, 2번 이상이면 %K가 70에 닿을 때 종료
+// %D가 70 위로 들어가면 '70 출발' 관리 시작 → 데크 1번 이하면 %D가, 2번 이상이면 %K가 30에 닿을 때 종료
+// 관리 중에 같은 쪽으로 다시 들어가도 새로 시작하지 않고 이어감 · 종료 순간 %D가 반대편 안이면 바로 반대쪽 관리 시작
+function track(K, D){
+  let st=null;
+  for(let i=1;i<D.length;i++){
+    if(isNaN(D[i])||isNaN(D[i-1])||isNaN(K[i])||isNaN(K[i-1])) continue;
+    let ended=null;
+    if(st){
+      if(st.side==="lo"){
+        if(K[i-1]<=D[i-1] && K[i]>D[i]) st.n++;                 // 골든크로스
+        if(st.n>=2 ? K[i]>=HI : D[i]>=HI){ ended="lo"; st=null; }
+      }else{
+        if(K[i-1]>=D[i-1] && K[i]<D[i]) st.n++;                 // 데드크로스
+        if(st.n>=2 ? K[i]<=LO : D[i]<=LO){ ended="hi"; st=null; }
+      }
+    }
+    if(!st){
+      if((D[i-1]>LO && D[i]<=LO) || (ended==="hi" && D[i]<=LO)) st={side:"lo",start:i,n:0};
+      else if((D[i-1]<HI && D[i]>=HI) || (ended==="lo" && D[i]>=HI)) st={side:"hi",start:i,n:0};
+    }
+  }
+  if(!st) return null;
+  const last=D.length-1, target=st.n>=2?"K":"D", cur=target==="K"?K[last]:D[last];
+  const remain = st.side==="lo" ? Math.max(0,HI-cur) : Math.max(0,cur-LO);
+  return {side:st.side, n:st.n, target, goal: st.side==="lo"?HI:LO, remain, age:last-st.start};
 }
 
 // ===== 신호 판정 =====
@@ -431,7 +473,7 @@ async function calc(sym, tf){
 function classify(v){
   if(!v) return null;
   const m=margin(), dirOnly=$("#dir").checked, slope=v.d-v.pd;
-  const o={d:v.d, pd:v.pd, slope, zone:null, cross:null, near:null, eta:null};
+  const o={d:v.d, pd:v.pd, slope, zone:null, cross:null, near:null, eta:null, tr:v.tr||null};
   if(v.d>=HI) o.zone="hot"; else if(v.d<=LO) o.zone="cold";
   if(v.pd<HI && v.d>=HI) o.cross="hot"; else if(v.pd>LO && v.d<=LO) o.cross="cold";
   if(v.d<HI && v.d>=HI-m && (!dirOnly || slope>0)) o.near="hot";
@@ -440,16 +482,16 @@ function classify(v){
   if(o.near==="cold" && slope<0) o.eta=(v.d-LO)/(-slope);
   return o;
 }
-const FILTERS = [
-  ["near","임박 전체", c=>c.near],
-  ["nhot","70 임박", c=>c.near==="hot"],
-  ["ncold","30 임박", c=>c.near==="cold"],
-  ["cross","방금 돌파", c=>c.cross],
-  ["hot","70 이상", c=>c.zone==="hot"],
-  ["cold","30 이하", c=>c.zone==="cold"],
-  ["any","모든 신호", c=>c.near||c.zone],
+const GROUPS = [
+  ["near","임박",     [["near","전체",c=>c.near], ["nhot","70 임박",c=>c.near==="hot"], ["ncold","30 임박",c=>c.near==="cold"]]],
+  ["trk","관리 중",   [["trk","전체",c=>c.tr], ["trklo","30 출발 ↗",c=>c.tr?.side==="lo"], ["trkhi","70 출발 ↘",c=>c.tr?.side==="hi"]]],
+  ["cross","방금 돌파",[["cross","전체",c=>c.cross], ["xhot","70 돌파",c=>c.cross==="hot"], ["xcold","30 돌파",c=>c.cross==="cold"]]],
 ];
-const fTest = k => (FILTERS.find(f=>f[0]===k)||FILTERS[0])[2];
+const ALLF = GROUPS.flatMap(g=>g[2]);
+const fTest = k => (ALLF.find(f=>f[0]===k)||ALLF[0])[2];
+const groupOf = k => (GROUPS.find(g=>g[2].some(f=>f[0]===k))||GROUPS[0])[0];
+const GROUP_SORTS = { near:["eta","hits","turn","rank","chg","sym"], trk:["remain","age","hits","turn","rank","chg","sym"], cross:["hits","turn","rank","chg","sym"] };
+const GROUP_DEFAULT = { near:["eta",1], trk:["remain",1], cross:["turn",-1] };
 
 // ===== 한 바퀴 검사 =====
 async function scan(){
@@ -490,8 +532,15 @@ function detectNew(tfs){
     if(fresh.length) notify(fresh);
   }else{ [...now.values()].filter(x=>x.kind[0]==="x").forEach(addLog); }
   prevKeys = new Set(now.keys());
+  // 관리 종료(힘 해소)는 기록에만 남김 (소리·팝업 없음)
+  const trkNow = new Map();
+  for(const s in results) for(const tf of tfs){ const t=results[s][tf]?.tr; if(t) trkNow.set(`${s}|${tf}|${t.side}`,1); }
+  if(prevTrk){ for(const k of prevTrk.keys()){ if(trkNow.has(k)) continue; const [s,tf,side]=k.split("|");
+      const c=classify(results[s]?.[tf]); if(c) addLog({s,tf,c,kind:"r"+side}); } }
+  prevTrk = trkNow;
 }
-const KIND_TXT = {xhot:"70 돌파", xcold:"30 돌파", nhot:"70 임박", ncold:"30 임박"};
+let prevTrk = null;
+const KIND_TXT = {xhot:"70 돌파", xcold:"30 돌파", nhot:"70 임박", ncold:"30 임박", rlo:"30쪽 해소", rhi:"70쪽 해소"};
 function addLog({s,tf,c,kind}){
   const el=document.createElement("div");
   const t=new Date().toTimeString().slice(0,5);
@@ -527,6 +576,7 @@ function miniChart(v, H=96, near=true){
     <polyline points="${path(v.ks)}" fill="none" stroke="var(--kline)" stroke-width="1.3"/>
     <polyline points="${path(v.ds)}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linejoin="round"/>
     <circle cx="${x(n-1)}" cy="${y(last)}" r="3.5" fill="${col}"/>
+    ${v.tr && v.tr.age<n-1 ? `<line x1="${x(n-1-v.tr.age)}" x2="${x(n-1-v.tr.age)}" y1="${P}" y2="${H-P}" stroke="${v.tr.side==="lo"?"var(--cold)":"var(--hot)"}" stroke-width="1.5" stroke-dasharray="2 2"/>`:""}
   </svg>`;
 }
 function spark(v){   // 표 안의 작은 D 추이(최근 20봉)
@@ -566,10 +616,16 @@ function cardHtml(x, tfs){
   const open=openSym===x.s, base=x.s.replace(/USDT$/,"");
   const top=`<div class="mc-top"><span class="caret muted">${open?"▼":"▶"}</span><button class="nm" data-tv="${x.s}">${base}</button><span class="rank">${x.rank?"#"+x.rank:""}</span><span class="sp"></span><span class="chg ${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</span></div>`;
   const links=`<span class="links"><a href="${tvUrl(x.s)}" target="_blank" rel="noopener">웹</a><a href="https://www.bybit.com/trade/usdt/${x.s}" target="_blank" rel="noopener">Bybit</a></span>`;
-  let mid, foot;
+  let mid, foot; const g=groupOf(filter), cellFn = g==="trk"?trkCell:dCell;
   if(view==="all"){
-    mid=`<div class="mc-tfs">${tfs.map(tf=>`<div class="mc-tf"><span class="lbl">${TF_NAME[tf]}</span>${dCell(x.cs[tf])}</div>`).join("")}</div>`;
-    foot=`<div class="mc-foot"><span>도달 예상 <b>${x.eta!=null&&x.eta<0?"돌파함":fmtEta(x.eta)}</b></span><span>거래대금 <b>${fmtTurn(x.turn)}</b></span>${links}</div>`;
+    mid=`<div class="mc-tfs">${tfs.map(tf=>`<div class="mc-tf"><span class="lbl">${TF_NAME[tf]}</span>${cellFn(x.cs[tf])}</div>`).join("")}</div>`;
+    const info = g==="near" ? `<span>도달 예상 <b>${fmtEta(x.eta)}</b></span>` : g==="trk" ? `<span>목표까지 <b>${x.remain!=null?x.remain.toFixed(1):"–"}</b></span>` : "";
+    foot=`<div class="mc-foot">${info}<span>거래대금 <b>${fmtTurn(x.turn)}</b></span>${links}</div>`;
+  }else if(g==="trk"){
+    const c=x.cs[view], v=results[x.s][view], t=c.tr;
+    mid=`<div class="mc-mid">${trkBadge(c)}${spark(v)}${trkCell(c)}</div>
+      <div class="mc-aux">${EXTRA.map(e=>`<span><span class="lbl">${e.label}</span> ${auxVal(v.ex?.[e.key])}</span>`).join("")}</div>`;
+    foot=`<div class="mc-foot"><span>목표 <b>%${t.target} ${t.goal}</b></span><span>남은 거리 <b>${t.remain.toFixed(1)}</b></span><span>${t.side==="lo"?"골크":"데크"} <b>${t.n}회</b></span><span>경과 <b>${fmtAge(t.age)}</b></span>${links}</div>`;
   }else{
     const c=x.cs[view], v=results[x.s][view];
     mid=`<div class="mc-mid">${badge(c)}${spark(v)}${dCell(c)}</div>
@@ -585,6 +641,17 @@ function dCell(c){
   const ar = c.near && !c.zone ? ` <span class="ar">${c.slope>0?"↗":"↘"}</span>` : "";
   return `<span class="d ${cls}">${c.cross?`<span class="x ${c.cross}">돌파</span>`:""}${c.d.toFixed(1)}${ar}</span>`;
 }
+const trkTxt = t => `${t.side==="lo"?"골크":"데크"}${t.n} · ${t.target}${t.goal}`;
+function trkCell(c){
+  if(!c) return `<span class="d mid">–</span>`;
+  if(!c.tr) return `<span class="d mid">${c.d.toFixed(1)}</span>`;
+  return `<span class="trk"><span class="d t${c.tr.side}">${c.d.toFixed(1)}</span><small>${trkTxt(c.tr)}</small></span>`;
+}
+function trkBadge(c){
+  if(!c?.tr) return `<span class="muted">–</span>`;
+  return `<span class="badge b-t${c.tr.side}">${c.tr.side==="lo"?"30 출발 ↗":"70 출발 ↘"}</span>`;
+}
+const fmtAge = a => a===0 ? "이번 봉" : `${a}봉째`;
 function badge(c){
   if(c.cross) return `<span class="badge b-x${c.cross}">${c.cross==="hot"?"70 돌파":"30 돌파"}</span>`;
   if(c.near)  return `<span class="badge b-n${c.near}">${c.near==="hot"?"70 임박 ↗":"30 임박 ↘"}</span>`;
@@ -601,8 +668,9 @@ function symCell(s, open){
 // ===== 정렬 옵션 =====
 const SORTS = {
   eta:  ["도달 임박 순", 1],
-  hits: ["신호 많은 순", -1],
-  ext:  ["D 극단 순", -1],
+  remain:["목표까지 가까운 순", 1],
+  age:  ["관리 시작 최근 순", 1],
+  hits: ["해당 봉 많은 순", -1],
   turn: ["거래대금 큰 순", -1],
   rank: ["시가총액 순위 순", 1],
   chg:  ["24h 상승률 순", -1],
@@ -614,7 +682,8 @@ function render(){
   const tfs = activeTfs();
   if(view!=="all" && !tfs.includes(view)) view="all";
   const viewTfs = view==="all" ? tfs : [view];
-  const test = fTest(filter);
+  const test = fTest(filter), g = groupOf(filter);
+  if(!GROUP_SORTS[g].includes(sortKey) && !TFS.includes(sortKey) && !["d","slope","pd","k"].includes(sortKey)){ [sortKey,sortDir]=GROUP_DEFAULT[g]; }
 
   // 봉 탭 (탭 옆 숫자 = 그 봉에서 현재 필터에 걸린 종목 수)
   const countTf = tf => Object.keys(results).filter(s=>{ const c=classify(results[s][tf]); return c && test(c); }).length;
@@ -622,30 +691,29 @@ function render(){
   $("#views").innerHTML = [["all","종합"],...tfs.map(tf=>[tf,TF_KO[tf]])].map(([k,n])=>
     `<button class="view" role="tab" data-v="${k}" aria-selected="${view===k}">${n}<span class="n">${k==="all"?countAll:countTf(k)}</span></button>`).join("");
 
-  // 필터 버튼 (숫자 = 지금 보고 있는 탭 기준)
-  $("#filters").innerHTML = FILTERS.map(([k,n,fn],i)=>{
-    const cnt = Object.keys(results).filter(s=>viewTfs.some(tf=>{ const c=classify(results[s][tf]); return c && fn(c); })).length;
-    return `<button class="tab${i===3?" sep":""}" data-f="${k}" aria-pressed="${filter===k}">${n}<span class="n">${cnt}</span></button>`; }).join("");
+  // 큰 탭(임박/관리 중/방금 돌파) + 세부 필터 (숫자 = 지금 보고 있는 봉 탭 기준)
+  const cntOf = fn => Object.keys(results).filter(s=>viewTfs.some(tf=>{ const c=classify(results[s][tf]); return c && fn(c); })).length;
+  $("#groups").innerHTML = GROUPS.map(([gk,gn,fs])=>`<button role="tab" data-g="${gk}" aria-selected="${g===gk}">${gn}<span class="n">${cntOf(fs[0][2])}</span></button>`).join("");
+  $("#filters").innerHTML = GROUPS.find(x=>x[0]===g)[2].map(([k,n,fn])=>`<button class="tab" data-f="${k}" aria-pressed="${filter===k}">${n}<span class="n">${cntOf(fn)}</span></button>`).join("");
 
   // 행 만들기
   const rows=[];
   for(const s in results){
-    const cs = {}; let hits=0, minEta=Infinity, maxExt=-1, any=false;
-    viewTfs.forEach(tf=>{ const c=classify(results[s][tf]); cs[tf]=c; if(!c) return;
-      if(test(c)) any=true;
-      if(c.near||c.zone) hits++;
+    const cs = {}; let hits=0, minEta=Infinity, minRem=Infinity, minAge=Infinity;
+    viewTfs.forEach(tf=>{ const c=classify(results[s][tf]); cs[tf]=c; if(!c || !test(c)) return;
+      hits++;
       if(c.eta!=null) minEta=Math.min(minEta,c.eta);
-      if(c.cross) minEta=Math.min(minEta,-1);           // 이미 돌파한 건 '임박 순'에서 맨 위
-      maxExt=Math.max(maxExt,Math.abs(c.d-50)); });
-    if(!any) continue;
-    rows.push({s,cs,hits,eta:minEta===Infinity?null:minEta,ext:maxExt,turn:tickers[s]?.turn||0,chg:tickers[s]?.chg||0,rank:rankOf(s)});
+      if(c.tr){ minRem=Math.min(minRem,c.tr.remain); minAge=Math.min(minAge,c.tr.age); } });
+    if(!hits) continue;
+    const fin = v => v===Infinity?null:v;
+    rows.push({s,cs,hits,eta:fin(minEta),remain:fin(minRem),age:fin(minAge),turn:tickers[s]?.turn||0,chg:tickers[s]?.chg||0,rank:rankOf(s)});
   }
-  const val = (x,k)=> k==="sym"?x.s : k==="hits"?x.hits : k==="ext"?x.ext : k==="turn"?x.turn : k==="chg"?x.chg
-                    : k==="rank"?(x.rank??1e9) : k==="eta"?(x.eta??1e9)
+  const val = (x,k)=> k==="sym"?x.s : k==="hits"?x.hits : k==="turn"?x.turn : k==="chg"?x.chg
+                    : k==="rank"?(x.rank??1e9) : k==="eta"?(x.eta??1e9) : k==="remain"?(x.remain??1e9) : k==="age"?(x.age??1e9)
                     : k==="d"?(x.cs[view]?.d??-1) : k==="slope"?(x.cs[view]?.slope??0) : TFS.includes(k)?tfSortVal(x,k) : 0;
   rows.sort((a,b)=>{ const A=val(a,sortKey),B=val(b,sortKey); return (A>B?1:A<B?-1:0)*sortDir || b.turn-a.turn; });
 
-  $("#sortSel").innerHTML = Object.entries(SORTS).map(([k,[n]])=>`<option value="${k}"${k===sortKey?" selected":""}>${n}</option>`).join("")
+  $("#sortSel").innerHTML = Object.entries(SORTS).filter(([k])=>GROUP_SORTS[g].includes(k)).map(([k,[n]])=>`<option value="${k}"${k===sortKey?" selected":""}>${n}</option>`).join("")
     + (SORTS[sortKey]?"":`<option value="${sortKey}" selected>표 제목 기준</option>`);
 
   if(MQ.matches){
@@ -658,12 +726,29 @@ function render(){
   $("#cards").innerHTML = "";
   let heads, body;
   if(view==="all"){
-    heads=[["sym","종목"],["rank","시총"],["hits","해당 봉"],...tfs.map(tf=>[tf,TF_NAME[tf]+" D"]),["eta","도달 예상"],["chg","24h 등락"],["turn","24h 거래대금"]];
+    const extra = g==="near" ? ["eta","도달 예상"] : g==="trk" ? ["remain","목표까지<small>가장 가까운 봉</small>"] : null;
+    const cellFn = g==="trk" ? trkCell : dCell;
+    heads=[["sym","종목"],["rank","시총"],["hits","해당 봉"],...tfs.map(tf=>[tf,TF_NAME[tf]+" D"]),...(extra?[extra]:[]),["chg","24h 등락"],["turn","24h 거래대금"]];
     body = rows.map(x=>{ const open=openSym===x.s;
       return `<tr class="row${open?" open":""}${newSet.has(x.s)?" new":""}" data-s="${x.s}" tabindex="0" aria-expanded="${open}">
         ${symCell(x.s,open)}<td class="rank">${x.rank?"#"+x.rank:"–"}</td><td class="c">${x.hits}/${tfs.length}</td>
-        ${tfs.map((tf,i)=>`<td class="c${i===0?" gs":""}">${dCell(x.cs[tf])}</td>`).join("")}
-        <td class="c gs">${x.eta!=null&&x.eta<0?"돌파함":fmtEta(x.eta)}</td>
+        ${tfs.map((tf,i)=>`<td class="c${i===0?" gs":""}">${cellFn(x.cs[tf])}</td>`).join("")}
+        ${g==="near"?`<td class="c gs">${fmtEta(x.eta)}</td>`:g==="trk"?`<td class="c gs">${x.remain!=null?x.remain.toFixed(1):"–"}</td>`:""}
+        <td class="${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</td><td>${fmtTurn(x.turn)}</td></tr>`
+        + (open?detailRow(x.s,heads.length):""); }).join("");
+  }else if(g==="trk"){
+    heads=[["sym","종목"],["rank","시총"],["state","상태"],["spark","D 추이<small>최근 20봉</small>"],["d","%D"],["k","%K"],["cnt","골크/데크"],["target","목표"],["remain","남은 거리"],["age","경과"],["aux","보조 D<small>5·3·3 / 20·12·12</small>"],["chg","24h 등락"],["turn","24h 거래대금"]];
+    body = rows.map(x=>{ const open=openSym===x.s, c=x.cs[view], v=results[x.s][view], t=c.tr;
+      return `<tr class="row${open?" open":""}${newSet.has(x.s)?" new":""}" data-s="${x.s}" tabindex="0" aria-expanded="${open}">
+        ${symCell(x.s,open)}<td class="rank">${x.rank?"#"+x.rank:"–"}</td>
+        <td class="c">${trkBadge(c)}</td><td class="c">${spark(v)}</td>
+        <td class="c gs"><span class="d t${t.side}">${c.d.toFixed(1)}</span></td>
+        <td class="muted">${v.ks.at(-1)?.toFixed(1)??"–"}</td>
+        <td class="c">${t.side==="lo"?"골크":"데크"} ${t.n}회</td>
+        <td class="c"><b>%${t.target} ${t.goal}</b></td>
+        <td class="c">${t.remain.toFixed(1)}</td>
+        <td class="c">${fmtAge(t.age)}</td>
+        <td class="c gs">${EXTRA.map(e=>auxVal(v.ex?.[e.key])).join('<span class="muted"> / </span>')}</td>
         <td class="${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</td><td>${fmtTurn(x.turn)}</td></tr>`
         + (open?detailRow(x.s,heads.length):""); }).join("");
   }else{
@@ -680,9 +765,9 @@ function render(){
         <td class="${x.chg>=0?"up":"dn"}">${x.chg>=0?"+":""}${x.chg.toFixed(2)}%</td><td>${fmtTurn(x.turn)}</td></tr>`
         + (open?detailRow(x.s,heads.length):""); }).join("");
   }
-  const CENTER = new Set(["hits","eta","state","spark","d","aux",...TFS]);
-  const GSTART = k => (view==="all" ? (k===tfs[0]||k==="eta") : (k==="d"||k==="aux"));
-  const sortable = new Set(["sym","rank","hits","eta","chg","turn","d","slope",...tfs]);
+  const CENTER = new Set(["hits","eta","state","spark","d","aux","cnt","target","remain","age",...TFS]);
+  const GSTART = k => (view==="all" ? (k===tfs[0]||k==="eta"||k==="remain") : (k==="d"||k==="aux"));
+  const sortable = new Set(["sym","rank","hits","eta","remain","age","chg","turn","d","slope",...tfs]);
   $("#thead").innerHTML = heads.map(([k,n])=>`<th data-k="${sortable.has(k)?k:""}" scope="col" class="${sortKey===k?"on":""} ${CENTER.has(k)?"c":""} ${GSTART(k)?"gs":""}">${n}${sortKey===k?(sortDir<0?" ▾":" ▴"):""}</th>`).join("");
   $("#tbody").innerHTML = body;
   $("#empty").hidden = rows.length>0;
@@ -702,9 +787,11 @@ function toast(html){ const t=$("#toast"); t.innerHTML=html; t.hidden=false; cle
 
 // ===== 클릭 처리 =====
 $("#views").addEventListener("click",e=>{ const b=e.target.closest(".view"); if(!b)return; view=b.dataset.v;
-  if(view==="all" && ["d","slope"].includes(sortKey)){ sortKey="eta"; sortDir=1; }
+  if(view==="all" && ["d","slope"].includes(sortKey)){ [sortKey,sortDir]=GROUP_DEFAULT[groupOf(filter)]; }
   if(view!=="all" && TFS.includes(sortKey)){ sortKey="d"; sortDir=-1; }
   save(); render(); });
+$("#groups").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b)return; const gk=b.dataset.g;
+  if(groupOf(filter)===gk) return; filter=gk; [sortKey,sortDir]=GROUP_DEFAULT[gk]; save(); render(); });
 $("#filters").addEventListener("click",e=>{ const b=e.target.closest(".tab"); if(!b)return; filter=b.dataset.f; save(); render(); });
 $(".tblbox").addEventListener("click", async e=>{
   if(e.target.closest("a") || e.target.closest(".minis")) return;
